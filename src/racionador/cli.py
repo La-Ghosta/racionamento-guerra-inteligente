@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from racionador.clima import obter_clima
 from racionador.modelos import Grupo, Pessoa, Suprimento
 from racionador.persistencia import carregar_grupo, salvar_grupo
 from racionador.racionamento import relatorio_completo, sugerir_corte
@@ -37,6 +38,22 @@ def _carregar_ou_abortar() -> Grupo:
         )
         raise typer.Exit(1) from None
     return grupo
+
+
+def _construir_tabela_clima(dados: dict) -> Table:
+    """Constrói a tabela Rich de exibição do clima."""
+    tabela = Table(title=f"Clima em {dados['cidade']}", show_lines=True)
+    tabela.add_column("Cidade", style="bold")
+    tabela.add_column("Temperatura", justify="right")
+    tabela.add_column("Descrição")
+    tabela.add_column("Umidade", justify="right")
+    tabela.add_row(
+        str(dados["cidade"]),
+        f"{dados['temperatura_c']}°C",
+        str(dados["descricao"]),
+        f"{dados['umidade']}%",
+    )
+    return tabela
 
 
 @app.command()
@@ -161,6 +178,11 @@ def status() -> None:
 
     console.print(tabela)
 
+    if grupo.localizacao:
+        dados_clima = obter_clima(grupo.localizacao)
+        if dados_clima is not None:
+            console.print(_construir_tabela_clima(dados_clima))
+
 
 @app.command()
 def sugerir(
@@ -258,6 +280,39 @@ def remover_suprimento(
     grupo.suprimentos.remove(sup)
     salvar_grupo(grupo, _ARQUIVO_DADOS)
     typer.echo(f"Suprimento '{sup.nome}' removido do grupo '{grupo.nome_grupo}'.")
+
+
+@app.command(name="set-localizacao")
+def set_localizacao(
+    cidade: str = typer.Argument(..., help="Nome da cidade para associar ao grupo."),
+) -> None:
+    """Define a localização geográfica do grupo."""
+    grupo = _carregar_ou_abortar()
+    grupo.localizacao = cidade
+    salvar_grupo(grupo, _ARQUIVO_DADOS)
+    console.print(
+        f"[green]Localização do grupo '{grupo.nome_grupo}' definida como '{cidade}'.[/green]"
+    )
+
+
+@app.command()
+def clima(
+    cidade: str = typer.Argument(..., help="Nome da cidade para consultar o clima."),
+) -> None:
+    """Consulta e exibe o clima atual de uma cidade."""
+    dados = obter_clima(cidade)
+
+    if dados is None:
+        if not os.getenv("OPENWEATHER_API_KEY"):
+            typer.echo(
+                "Erro: API key não configurada. Defina OPENWEATHER_API_KEY para ativar o clima.",
+                err=True,
+            )
+        else:
+            typer.echo("Erro: Não foi possível obter o clima no momento.", err=True)
+        raise typer.Exit(1) from None
+
+    console.print(_construir_tabela_clima(dados))
 
 
 @app.command()

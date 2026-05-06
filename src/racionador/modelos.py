@@ -48,3 +48,4 @@ class Grupo:
     nome_grupo: str
     pessoas: list[Pessoa] = field(default_factory=list)
     suprimentos: list[Suprimento] = field(default_factory=list)
+    localizacao: str | None = None

@@ -28,4 +28,5 @@ def carregar_grupo(caminho: str | Path) -> Grupo | None:
         nome_grupo=data["nome_grupo"],
         pessoas=pessoas,
         suprimentos=suprimentos,
+        localizacao=data.get("localizacao"),
     )
