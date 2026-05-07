@@ -5,6 +5,26 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 O formato segue a convenção de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.1.0] - 2026-05-07 — Etapa 2 do Bootcamp
+
+### Adicionado
+- Módulo `racionador/clima.py` com função `obter_clima` para consultar a API pública OpenWeather.
+- Comando `racionador clima <cidade>` na CLI.
+- Comando `racionador set-localizacao <cidade>` na CLI.
+- Campo opcional `localizacao` em `Grupo` (modelos.py e persistencia.py).
+- Enriquecimento do comando `status` com dados de clima quando há localização cadastrada.
+- Camada web em Streamlit (`streamlit_app.py`) reusando a lógica existente.
+- Deploy público em Streamlit Cloud: https://racionador-supri.streamlit.app/
+- 8 testes de integração mockados em `tests/test_clima.py`.
+- Dependência de produção: `requests>=2.31`.
+
+### Mudado
+- Pipeline de CI passa a rodar em qualquer branch e em pull requests.
+- Versão do projeto: 1.0.0 → 1.1.0.
+
+### Vinculado
+- Issue [#1](https://github.com/La-Ghosta/racionador-supri/issues/1) (Etapa 2 do Bootcamp).
+
 ## [1.0.0] - 2026-04-11
 
 ### Adicionado

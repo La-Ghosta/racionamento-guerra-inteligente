@@ -1,7 +1,11 @@
+> 🚀 **Aplicação publicada (Etapa 2):** https://racionador-supri.streamlit.app/
+>
+> **Issue da Etapa 2:** [#1](https://github.com/La-Ghosta/racionador-supri/issues/1)
+
 # Racionador-Supri
 
 [![CI](https://github.com/La-Ghosta/racionador-supri/actions/workflows/ci.yml/badge.svg)](https://github.com/La-Ghosta/racionador-supri/actions/workflows/ci.yml)
-![Versao](https://img.shields.io/badge/versao-1.0.0-blue)
+![Versao](https://img.shields.io/badge/versao-1.1.0-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Licenca](https://img.shields.io/badge/licenca-MIT-green)
 
@@ -14,7 +18,7 @@ Aplicação de linha de comando (CLI) feita em Python para ajudar famílias e gr
 Este projeto foi desenvolvido como atividade da disciplina e simula um pequeno ciclo profissional de desenvolvimento de software, incluindo versionamento semântico, declaração de dependências, testes automatizados, linting e integração contínua.
 
 - **Autor:** Guilherme Holanda
-- **Versão atual:** `1.0.0`
+- **Versão atual:** `1.1.0`
 - **Repositório público:** https://github.com/La-Ghosta/racionador-supri
 - **Licença:** MIT
 
@@ -65,6 +69,8 @@ Tudo é salvo localmente em um arquivo `dados.json`, sem precisar de internet ou
 - Atualização e remoção de itens.
 - Persistência local em JSON, sem necessidade de internet.
 - Mensagens de erro amigáveis (ex: nomes duplicados, valores negativos, grupo vazio).
+- Definição opcional de localização do grupo (`set-localizacao`).
+- Consulta de clima local via API pública OpenWeather, com enriquecimento automático do comando `status` quando há localização cadastrada.
 
 ---
 
@@ -78,6 +84,8 @@ Tudo é salvo localmente em um arquivo `dados.json`, sem precisar de internet ou
 | pytest | Testes automatizados |
 | ruff | Linting e formatação de código |
 | GitHub Actions | Pipeline de Integração Contínua (CI) |
+| Streamlit | Interface web |
+| Requests | Consumo de APIs HTTP |
 
 ---
 
@@ -151,6 +159,12 @@ racionador add-suprimento "Medicamento" 10 1.0 un
 # 4. Ver o status (tabela colorida)
 racionador status
 
+# 4.1. (Opcional) Definir a localização do grupo
+racionador set-localizacao "Kyiv"
+
+# 4.2. (Opcional) Consultar o clima de uma cidade
+racionador clima "Kyiv"
+
 # 5. Pedir uma sugestão de corte para a agua durar 10 dias
 racionador sugerir Agua 10
 
@@ -180,6 +194,8 @@ Os dados são salvos em um arquivo `dados.json` na pasta atual. Se quiser começ
 | `racionador listar` | Lista pessoas e suprimentos |
 | `racionador status` | Mostra o relatório colorido |
 | `racionador sugerir <suprimento> <dias>` | Sugere corte de consumo |
+| `racionador set-localizacao <cidade>` | Define a localização do grupo (usada pelo clima) |
+| `racionador clima <cidade>` | Consulta o clima atual de uma cidade |
 
 Para ver a ajuda de qualquer comando:
 
@@ -187,6 +203,28 @@ Para ver a ajuda de qualquer comando:
 racionador --help
 racionador status --help
 ```
+
+---
+
+## Versão web
+
+Além da CLI, existe uma versão em interface web feita com Streamlit, que reusa a mesma lógica de domínio. Ela está publicada em:
+
+🚀 **https://racionador-supri.streamlit.app/**
+
+Para rodar a versão web localmente:
+
+    streamlit run streamlit_app.py
+
+A versão web mantém os dados na sessão do navegador e oferece download e upload do estado em JSON, sem dependência de banco de dados.
+
+---
+
+## Integração com clima (OpenWeather)
+
+A versão 1.1.0 adiciona consulta opcional ao clima atual via API pública da OpenWeather. **A aplicação continua funcionando 100% offline** — esse é o caráter central do projeto, pensado para zonas de crise humanitária onde a conectividade é intermitente. Quando há internet, os comandos `clima` e `status` (com localização cadastrada) exibem dados climáticos da cidade. Quando não há, eles seguem respondendo normalmente sem o enriquecimento.
+
+A integração é via variável de ambiente `OPENWEATHER_API_KEY` na CLI e via secret no painel do Streamlit Cloud na versão web.
 
 ---
 
@@ -198,7 +236,7 @@ Com as dependências de desenvolvimento instaladas (`pip install -e ".[dev]"`):
 pytest
 ```
 
-A suite tem **20 testes** cobrindo:
+A suite tem **29 testes** cobrindo:
 
 - caminho feliz dos cálculos de racionamento;
 - entradas inválidas (quantidades negativas, grupo vazio, dias-alvo zero);
@@ -265,16 +303,20 @@ racionador-supri/
 │       ├── modelos.py          # Dataclasses (Pessoa, Suprimento, Grupo)
 │       ├── racionamento.py     # Lógica pura de cálculo
 │       ├── persistencia.py     # Salvar e carregar JSON
+│       ├── clima.py            # Integração com OpenWeather
 │       └── cli.py              # Interface CLI com Typer + Rich
 ├── tests/
 │   ├── __init__.py
 │   ├── test_modelos.py
 │   ├── test_racionamento.py
-│   └── test_persistencia.py
+│   ├── test_persistencia.py
+│   └── test_clima.py
 ├── .gitignore
 ├── CHANGELOG.md
 ├── LICENSE
 ├── pyproject.toml              # Manifesto + versão + dependências
+├── streamlit_app.py
+├── requirements.txt
 └── README.md
 ```
 
@@ -282,7 +324,7 @@ racionador-supri/
 
 ## Versão e licença
 
-- **Versão atual:** `1.0.0` (declarada no `pyproject.toml`)
+- **Versão atual:** `1.1.0` (declarada no `pyproject.toml`)
 - **Licença:** MIT - veja o arquivo [LICENSE](LICENSE)
 
 ---

@@ -1,6 +1,6 @@
 [project]
 name = "racionador-supri"
-version = "1.0.0"
+version = "1.1.0"
 description = "Racionamento de suprimentos em zonas de conflito humanitário"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -11,6 +11,7 @@ license = { text = "MIT" }
 dependencies = [
     "typer>=0.12",
     "rich>=13.0",
+    "requests>=2.31",
 ]
 
 [project.optional-dependencies]
