@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from racionador.clima import obter_clima
+from racionador.clima import geocodificar, obter_clima
 
 
 @pytest.fixture
@@ -98,4 +98,38 @@ def test_obter_clima_chave_faltante(monkeypatch):
     mock_cliente = MagicMock()
     mock_cliente.get.return_value = mock_resposta
     resultado = obter_clima("Brasilia", http_client=mock_cliente)
+    assert resultado is None
+
+
+def test_geocodificar_resposta_valida(monkeypatch):
+    monkeypatch.setenv("OPENWEATHER_API_KEY", "test-key")
+    mock_resposta = MagicMock()
+    mock_resposta.json.return_value = [{"name": "Kyiv", "lat": 50.4501, "lon": 30.5234}]
+    mock_cliente = MagicMock()
+    mock_cliente.get.return_value = mock_resposta
+    resultado = geocodificar("Kyiv", http_client=mock_cliente)
+    assert resultado == (50.4501, 30.5234)
+
+
+def test_geocodificar_sem_api_key(monkeypatch):
+    monkeypatch.delenv("OPENWEATHER_API_KEY", raising=False)
+    resultado = geocodificar("Kyiv")
+    assert resultado is None
+
+
+def test_geocodificar_cidade_nao_encontrada(monkeypatch):
+    monkeypatch.setenv("OPENWEATHER_API_KEY", "test-key")
+    mock_resposta = MagicMock()
+    mock_resposta.json.return_value = []
+    mock_cliente = MagicMock()
+    mock_cliente.get.return_value = mock_resposta
+    resultado = geocodificar("CidadeInexistente", http_client=mock_cliente)
+    assert resultado is None
+
+
+def test_geocodificar_connection_error(monkeypatch):
+    monkeypatch.setenv("OPENWEATHER_API_KEY", "test-key")
+    mock_cliente = MagicMock()
+    mock_cliente.get.side_effect = requests.exceptions.ConnectionError()
+    resultado = geocodificar("Kyiv", http_client=mock_cliente)
     assert resultado is None
