@@ -43,7 +43,12 @@ def salvar_grupo(grupo: Grupo, client: Any) -> bool:
         resultado = (
             client.table("grupos")
             .upsert(
-                {"nome": grupo.nome_grupo, "localizacao": grupo.localizacao},
+                {
+                    "nome": grupo.nome_grupo,
+                    "localizacao": grupo.localizacao,
+                    "regiao": grupo.regiao,
+                    "pedido_ajuda": grupo.pedido_ajuda,
+                },
                 on_conflict="nome",
             )
             .execute()
@@ -102,6 +107,9 @@ def carregar_grupo(nome: str, client: Any) -> Grupo | None:
             pessoas=pessoas,
             suprimentos=suprimentos,
             localizacao=linha_grupo.get("localizacao"),
+            # Defaults seguros: coluna nula ou ausente vira "" / False.
+            regiao=linha_grupo.get("regiao") or "",
+            pedido_ajuda=bool(linha_grupo.get("pedido_ajuda")),
         )
     except Exception:
         return None

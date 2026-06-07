@@ -8,6 +8,7 @@ e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ## [2.0.0] - 2026-06-07 — Etapa 3: Banco de dados (Supabase) e Feature 4 (coordenação entre grupos)
 
 ### Adicionado
+- Feature 4: persistência de `regiao` e `pedido_ajuda` (JSON e Supabase) + migração da tabela `grupos`.
 - Feature 4: campos `regiao` e `pedido_ajuda` no modelo de Grupo (coordenação entre grupos).
 - Camada de persistência em Supabase (PostgreSQL): `persistencia_supabase.py` com
   `criar_cliente`, `salvar_grupo`, `carregar_grupo` e `listar_grupos` (client injetável),

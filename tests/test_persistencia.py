@@ -72,6 +72,18 @@ def test_roundtrip_com_categoria_e_validade(tmp_path):
     assert carregado.suprimentos[0].validade == datetime.date(2026, 12, 31)
 
 
+def test_roundtrip_com_regiao_e_pedido_ajuda(tmp_path):
+    caminho = tmp_path / "grupo_regiao.json"
+    grupo = Grupo(nome_grupo="Equipe", regiao="Norte", pedido_ajuda=True)
+
+    salvar_grupo(grupo, caminho)
+    carregado = carregar_grupo(caminho)
+
+    assert carregado is not None
+    assert carregado.regiao == "Norte"
+    assert carregado.pedido_ajuda is True
+
+
 def test_carrega_json_antigo_sem_campos_novos(tmp_path):
     caminho = tmp_path / "grupo_antigo.json"
     dados_antigos = {
@@ -94,3 +106,5 @@ def test_carrega_json_antigo_sem_campos_novos(tmp_path):
     assert carregado is not None
     assert carregado.suprimentos[0].categoria == "outro"
     assert carregado.suprimentos[0].validade is None
+    assert carregado.regiao == ""
+    assert carregado.pedido_ajuda is False

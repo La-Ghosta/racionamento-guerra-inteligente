@@ -18,6 +18,8 @@ def _grupo_completo() -> Grupo:
     return Grupo(
         nome_grupo="Equipe Alfa",
         localizacao="Kyiv",
+        regiao="Norte",
+        pedido_ajuda=True,
         pessoas=[Pessoa(nome="Carlos", idade=40)],
         suprimentos=[
             Suprimento(
@@ -45,7 +47,14 @@ def cliente_carregar():
     """Client mockado que devolve dados distintos por tabela."""
     tabela_grupos = MagicMock()
     tabela_grupos.select.return_value.eq.return_value.execute.return_value.data = [
-        {"id": 7, "nome": "Equipe Alfa", "localizacao": "Kyiv", "criado_em": "2026-06-01"}
+        {
+            "id": 7,
+            "nome": "Equipe Alfa",
+            "localizacao": "Kyiv",
+            "regiao": "Norte",
+            "pedido_ajuda": True,
+            "criado_em": "2026-06-01",
+        }
     ]
 
     tabela_pessoas = MagicMock()
@@ -99,7 +108,12 @@ def test_salvar_grupo_happy_path(cliente_salvar):
 
     chain = cliente_salvar.table.return_value
     chain.upsert.assert_called_once_with(
-        {"nome": "Equipe Alfa", "localizacao": "Kyiv"},
+        {
+            "nome": "Equipe Alfa",
+            "localizacao": "Kyiv",
+            "regiao": "Norte",
+            "pedido_ajuda": True,
+        },
         on_conflict="nome",
     )
     chain.delete.return_value.eq.assert_any_call("grupo_id", 7)
@@ -141,6 +155,8 @@ def test_carregar_grupo_happy_path(cliente_carregar):
     assert grupo is not None
     assert grupo.nome_grupo == "Equipe Alfa"
     assert grupo.localizacao == "Kyiv"
+    assert grupo.regiao == "Norte"
+    assert grupo.pedido_ajuda is True
 
     assert len(grupo.pessoas) == 1
     assert grupo.pessoas[0].nome == "Carlos"
@@ -155,6 +171,27 @@ def test_carregar_grupo_happy_path(cliente_carregar):
     assert sup.unidade_medida == "L"
     assert sup.categoria == "agua"
     assert sup.validade == datetime.date(2026, 12, 31)
+
+
+def test_carregar_grupo_colunas_nulas_usam_defaults():
+    """Linha antiga (antes da migração) com regiao/pedido_ajuda nulos → defaults."""
+    tabela_grupos = MagicMock()
+    tabela_grupos.select.return_value.eq.return_value.execute.return_value.data = [
+        {"id": 7, "nome": "Legado", "localizacao": None, "regiao": None, "pedido_ajuda": None}
+    ]
+
+    tabela_vazia = MagicMock()
+    tabela_vazia.select.return_value.eq.return_value.execute.return_value.data = []
+
+    tabelas = {"grupos": tabela_grupos, "pessoas": tabela_vazia, "suprimentos": tabela_vazia}
+    cliente = MagicMock()
+    cliente.table.side_effect = tabelas.__getitem__
+
+    grupo = carregar_grupo("Legado", cliente)
+
+    assert grupo is not None
+    assert grupo.regiao == ""
+    assert grupo.pedido_ajuda is False
 
 
 def test_carregar_grupo_inexistente_retorna_none():
