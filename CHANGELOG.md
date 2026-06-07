@@ -8,6 +8,7 @@ e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ## [2.0.0] - 2026-06-07 — Etapa 3: Banco de dados (Supabase) e Feature 4 (coordenação entre grupos)
 
 ### Adicionado
+- Aba Início em CRT (localização, região, selo SOS); helper info(); testes dos helpers;
 - Clique no grupo da Coordenação carrega o grupo e abre a aba Status (link CRT + query param + controle de aba do st.tabs).
 - Aba Status reescrita como log de estoque CRT (linha NOME + [N DIAS], cor por status).
 - Adiciona base do tema CRT (config, CSS e helpers de log) sem alterar abas; fixa Streamlit em 1.57.0.

@@ -9,7 +9,7 @@ from urllib.parse import quote
 import pandas as pd
 import streamlit as st
 
-from crt_ui import classe_status, linha, load_theme, secao
+from crt_ui import classe_status, info, linha, load_theme, secao
 from racionador.clima import geocodificar, obter_clima
 from racionador.coordenacao import visao_coordenador
 from racionador.mapa import montar_dados_mapa
@@ -257,13 +257,20 @@ def _aba_inicio() -> None:
         col1.metric("Grupo", grupo.nome_grupo)
         col2.metric("Pessoas", len(grupo.pessoas))
         col3.metric("Suprimentos", len(grupo.suprimentos))
+        linhas_info = []
         if grupo.localizacao:
-            st.caption(f"📍 Localização: {grupo.localizacao}")
-        st.caption(f"🗺️ Região: {grupo.regiao or 'não definida'}")
+            linhas_info.append(info("LOCALIZAÇÃO", grupo.localizacao))
+        linhas_info.append(info("REGIÃO", grupo.regiao or "NÃO DEFINIDA"))
         if grupo.pedido_ajuda:
-            st.error("🆘 Pedido de ajuda ativo")
+            linhas_info.append(
+                '<div class="log-line">'
+                '<span class="label" style="color:var(--crit);text-shadow:0 0 6px var(--crit)">PEDIDO DE AJUDA</span>'
+                '<span class="dots"></span>'
+                '<span class="badge sos">SOS</span></div>'
+            )
         else:
-            st.caption("Pedido de ajuda: não")
+            linhas_info.append(info("PEDIDO DE AJUDA", "NÃO", estado="sem-dados"))
+        st.markdown('<div class="crt">' + "".join(linhas_info) + "</div>", unsafe_allow_html=True)
         if st.button("🔄 Recarregar dados de exemplo"):
             st.session_state.grupo = _grupo_exemplo()
             _persistir(st.session_state.grupo)
@@ -391,7 +398,6 @@ def _aba_suprimentos() -> None:
 
 # --- BLOCO 9: Aba Status ---
 
-_STATUS_EMOJI = {"OK": "🟢", "ALERTA": "🟡", "CRITICO": "🔴", "SEM_DADOS": "⚪"}
 _STATUS_LABEL = {"OK": "OK", "ALERTA": "ALERTA", "CRITICO": "CRÍTICO", "SEM_DADOS": "SEM DADOS"}
 
 

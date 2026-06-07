@@ -1,8 +1,6 @@
 import html
 from pathlib import Path
 
-import streamlit as st
-
 # status cru (do relatorio / ResumoGrupo) -> classe CSS
 _STATUS_CLASSE = {
     "OK": "ok",
@@ -21,6 +19,8 @@ def classe_status(status: str) -> str:
 
 
 def load_theme(nome: str = "theme.css") -> None:
+    import streamlit as st
+
     css = (Path(__file__).parent / nome).read_text(encoding="utf-8")
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
@@ -53,4 +53,14 @@ def secao(titulo: str, linhas: list[str]) -> str:
         f'<div class="section"><div class="section-title">{html.escape(titulo)}</div>'
         + "".join(linhas)
         + "</div>"
+    )
+
+
+def info(label, valor, estado="ok"):
+    cls = "log-line" + ("" if estado == "ok" else f" {estado}")
+    return (
+        f'<div class="{cls}">'
+        f'<span class="label">{html.escape(str(label))}</span>'
+        f'<span class="dots"></span>'
+        f'<span class="tag">[{html.escape(str(valor))}]</span></div>'
     )
