@@ -52,3 +52,5 @@ class Grupo:
     pessoas: list[Pessoa] = field(default_factory=list)
     suprimentos: list[Suprimento] = field(default_factory=list)
     localizacao: str | None = None
+    regiao: str = ""  # [F4] região para agrupar no painel do coordenador
+    pedido_ajuda: bool = False  # [F4] grupo sinalizou que precisa de ajuda
