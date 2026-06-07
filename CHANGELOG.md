@@ -8,6 +8,7 @@ e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ## [2.0.0] - 2026-06-07 — Etapa 3: Banco de dados (Supabase) e Feature 4 (coordenação entre grupos)
 
 ### Adicionado
+- Aba Status reescrita como log de estoque CRT (linha NOME + [N DIAS], cor por status).
 - Adiciona base do tema CRT (config, CSS e helpers de log) sem alterar abas; fixa Streamlit em 1.57.0.
 - Feature 4: visão de coordenador no Streamlit (lista por região, status, pedidos de ajuda e mapa), indicadores de região/pedido de ajuda na aba Início, e correção do round-trip JSON do app para os campos novos.
 - Feature 4: geocoding de cidades (`geocodificar` em `clima.py`) para o mapa do coordenador.

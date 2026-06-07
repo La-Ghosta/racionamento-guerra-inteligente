@@ -8,7 +8,7 @@ from dataclasses import asdict
 import pandas as pd
 import streamlit as st
 
-from crt_ui import load_theme
+from crt_ui import classe_status, linha, load_theme, secao
 from racionador.clima import geocodificar, obter_clima
 from racionador.coordenacao import visao_coordenador
 from racionador.mapa import montar_dados_mapa
@@ -407,24 +407,21 @@ def _aba_status() -> None:
         st.error(str(e))
         return
 
-    linhas = []
-    for nome_sup, dados in relatorio.items():
-        emoji = _STATUS_EMOJI[dados["status"]]
-        label = _STATUS_LABEL[dados["status"]]
+    linhas_log = []
+    for i, (nome_sup, dados) in enumerate(relatorio.items(), start=1):
         dias = dados["dias_restantes"]
         dias_str = str(int(dias)) if dias != float("inf") else "∞"
-        corte = dados["corte_sugerido_pct"]
-        linhas.append(
-            {
-                "Suprimento": nome_sup,
-                "Quantidade": f"{dados['quantidade_atual']} {dados['unidade_medida']}",
-                "Dias restantes": dias_str,
-                "Status": f"{emoji} {label}",
-                "Corte sugerido": f"{corte:.1f}%" if corte > 0 else "—",
-            }
-        )
+        if dias_str == "∞":
+            tag = "∞"
+        else:
+            tag = f"{dias_str} DIA" if dias_str == "1" else f"{dias_str} DIAS"
+        linhas_log.append(linha(i, nome_sup, tag, estado=classe_status(dados["status"])))
 
-    st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+    if not linhas_log:
+        linhas_log = [linha(1, "SEM SUPRIMENTOS", "—", estado="sem-dados")]
+
+    html = '<div class="crt">' + secao("ESTOQUE", linhas_log) + "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
     if grupo.localizacao:
         with st.spinner(f"Consultando clima em {grupo.localizacao}…"):
