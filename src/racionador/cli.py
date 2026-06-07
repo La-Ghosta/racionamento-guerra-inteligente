@@ -1,5 +1,6 @@
 """Interface de linha de comando do racionador de suprimentos."""
 
+import datetime
 import os
 from pathlib import Path
 
@@ -108,6 +109,12 @@ def add_suprimento(
     quantidade: float = typer.Argument(..., help="Quantidade atual disponível."),
     consumo_diario: float = typer.Argument(..., help="Consumo diário padrão por adulto."),
     unidade: str = typer.Argument(..., help="Unidade de medida (ex: kg, L, un)."),
+    categoria: str = typer.Option(
+        "outro", "--categoria", help="Categoria do suprimento (ex: agua, comida, remedio)."
+    ),
+    validade: str | None = typer.Option(
+        None, "--validade", help="Data de validade no formato AAAA-MM-DD."
+    ),
 ) -> None:
     """Adiciona um suprimento ao grupo."""
     grupo = _carregar_ou_abortar()
@@ -121,12 +128,25 @@ def add_suprimento(
         )
         raise typer.Exit(1) from None
 
+    data_validade: datetime.date | None = None
+    if validade is not None:
+        try:
+            data_validade = datetime.date.fromisoformat(validade)
+        except ValueError:
+            typer.echo(
+                f"Erro: validade '{validade}' inválida. Use o formato AAAA-MM-DD.",
+                err=True,
+            )
+            raise typer.Exit(1) from None
+
     try:
         suprimento = Suprimento(
             nome=nome,
             quantidade_atual=quantidade,
             consumo_diario_padrao=consumo_diario,
             unidade_medida=unidade,
+            categoria=categoria,
+            validade=data_validade,
         )
     except ValueError as e:
         typer.echo(f"Erro: {e}", err=True)
@@ -344,6 +364,8 @@ def listar() -> None:
     tabela_sup.add_column("Quantidade atual", justify="right")
     tabela_sup.add_column("Consumo/dia (adulto)", justify="right")
     tabela_sup.add_column("Unidade")
+    tabela_sup.add_column("Categoria")
+    tabela_sup.add_column("Validade", justify="right")
 
     for sup in grupo.suprimentos:
         tabela_sup.add_row(
@@ -351,6 +373,8 @@ def listar() -> None:
             str(sup.quantidade_atual),
             str(sup.consumo_diario_padrao),
             sup.unidade_medida,
+            sup.categoria,
+            sup.validade.isoformat() if sup.validade else "—",
         )
 
     if grupo.suprimentos:

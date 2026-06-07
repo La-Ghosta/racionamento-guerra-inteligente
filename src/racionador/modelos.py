@@ -1,5 +1,6 @@
 """Modelos de domínio do racionador de suprimentos."""
 
+import datetime
 from dataclasses import dataclass, field
 
 
@@ -11,6 +12,8 @@ class Suprimento:
     quantidade_atual: float
     consumo_diario_padrao: float
     unidade_medida: str
+    categoria: str = "outro"
+    validade: datetime.date | None = None
 
     def __post_init__(self) -> None:
         if self.quantidade_atual < 0:
