@@ -8,6 +8,7 @@ from dataclasses import asdict
 import pandas as pd
 import streamlit as st
 
+from crt_ui import load_theme
 from racionador.clima import geocodificar, obter_clima
 from racionador.coordenacao import visao_coordenador
 from racionador.mapa import montar_dados_mapa
@@ -27,6 +28,7 @@ st.set_page_config(
     page_icon="📦",
     layout="wide",
 )
+load_theme()
 
 # --- BLOCO 2: Inject secrets a partir de st.secrets (se houver) ---
 # st.secrets levanta StreamlitSecretNotFoundError quando nao existe
