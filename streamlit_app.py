@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 from dataclasses import asdict
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
@@ -501,22 +502,21 @@ def _aba_coordenacao() -> None:
     st.header("🗺️ Visão do coordenador")
     st.caption(f"{len(grupos)} grupo(s) no banco, agrupados por região e ordenados por urgência.")
 
+    blocos = []
     for regiao, resumos in visao.por_regiao.items():
-        st.subheader(regiao or "Sem região")
-        for resumo in resumos:
-            col1, col2, col3, col4 = st.columns([2, 3, 2, 2])
-            col1.write(f"{_STATUS_EMOJI[resumo.status]} {_STATUS_LABEL[resumo.status]}")
-            col2.write(f"**{resumo.nome_grupo}**")
-            col3.write(f"{resumo.total_pessoas} pessoa(s)")
-            if resumo.pedido_ajuda:
-                col4.error("🆘 PEDIU AJUDA")
-            detalhes = []
-            if resumo.localizacao:
-                detalhes.append(f"📍 {resumo.localizacao}")
-            if resumo.suprimentos_criticos:
-                detalhes.append(f"críticos: {', '.join(resumo.suprimentos_criticos)}")
-            if detalhes:
-                st.caption(" · ".join(detalhes))
+        linhas_grp = [
+            linha(
+                i,
+                r.nome_grupo,
+                _STATUS_LABEL.get(r.status, r.status),
+                estado=classe_status(r.status),
+                sos=r.pedido_ajuda,
+                href=f"?grupo={quote(r.nome_grupo)}",
+            )
+            for i, r in enumerate(resumos, start=1)
+        ]
+        blocos.append(secao((regiao or "SEM REGIÃO").upper(), linhas_grp))
+    st.markdown('<div class="crt">' + "".join(blocos) + "</div>", unsafe_allow_html=True)
 
     st.divider()
 
@@ -525,6 +525,12 @@ def _aba_coordenacao() -> None:
     dados_mapa = montar_dados_mapa(visao.resumos, _geocodificar_cacheado)
     if dados_mapa:
         df_mapa = pd.DataFrame(dados_mapa)
+        st.markdown(
+            '<div class="crt"><div class="section-title" '
+            'style="position:static;display:inline-block;margin-bottom:.4rem">'
+            "LIVE MAP [GPS]</div></div>",
+            unsafe_allow_html=True,
+        )
         st.map(df_mapa, latitude="lat", longitude="lon", color="cor")
     else:
         st.caption(
@@ -536,10 +542,28 @@ def _aba_coordenacao() -> None:
 
 
 def main() -> None:
+    client = _obter_cliente_supabase()
+
+    grupo_q = st.query_params.get("grupo")
+    if grupo_q:
+        g = None
+        if client is not None:
+            try:
+                g = carregar_grupo(grupo_q, client)
+            except Exception:
+                g = None
+        if g is not None:
+            st.session_state.grupo = g
+            st.session_state["aba_ativa"] = "📊 Status"
+        del st.query_params["grupo"]
+        st.rerun()
+
     _renderizar_sidebar()
 
     aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(
-        ["🏠 Início", "👥 Pessoas", "📦 Suprimentos", "📊 Status", "✂️ Sugestões", "🗺️ Coordenação"]
+        ["🏠 Início", "👥 Pessoas", "📦 Suprimentos", "📊 Status", "✂️ Sugestões", "🗺️ Coordenação"],
+        key="aba_ativa",
+        on_change="rerun",
     )
 
     with aba1:

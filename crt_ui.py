@@ -25,17 +25,27 @@ def load_theme(nome: str = "theme.css") -> None:
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
-def linha(num: int, nome: str, tag: str, estado: str = "ok", sos: bool = False) -> str:
+def linha(
+    num: int,
+    nome: str,
+    tag: str,
+    estado: str = "ok",
+    sos: bool = False,
+    href: str | None = None,
+) -> str:
     # estado: "ok" | "alerta" | "crit" | "esgotado" | "vence" | "sem-dados"
     cls = "log-line" + ("" if estado == "ok" else f" {estado}")
     selo = '<span class="badge sos">SOS</span>' if sos else ""
-    return (
+    inner = (
         f'<div class="{cls}">'
         f'<span class="num">{num:02d}</span>'
         f'<span class="label">{html.escape(str(nome))}</span>'
         f'<span class="dots"></span>'
         f'<span class="tag">[{html.escape(str(tag))}]</span>{selo}</div>'
     )
+    if href:
+        return f'<a class="log-link" target="_self" href="{html.escape(href)}">{inner}</a>'
+    return inner
 
 
 def secao(titulo: str, linhas: list[str]) -> str:

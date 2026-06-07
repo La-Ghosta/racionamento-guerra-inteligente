@@ -53,6 +53,10 @@
 .log-line .dots  { flex: 1; border-bottom: 1px dotted var(--dim); transform: translateY(-.35em); }
 .log-line .tag   { color: var(--accent); white-space: nowrap; }
 
+.log-link { display: block; text-decoration: none !important; color: inherit !important; cursor: pointer; }
+.log-link:hover { text-decoration: none !important; }
+.log-link:hover .log-line { filter: brightness(1.25); }
+
 .log-line.alerta .label, .log-line.alerta .tag { color: var(--alerta); text-shadow: 0 0 6px var(--alerta); }
 .log-line.vence  .label, .log-line.vence  .tag { color: var(--vence);  text-shadow: 0 0 6px var(--vence);  animation: blink 1.8s steps(2,start) infinite; }
 .log-line.crit   .label, .log-line.crit   .tag { color: var(--crit);   text-shadow: 0 0 6px var(--crit);   animation: blink 1.1s steps(2,start) infinite; }
