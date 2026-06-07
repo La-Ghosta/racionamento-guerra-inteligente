@@ -1,5 +1,6 @@
 """Camada web do Racionador-Supri em Streamlit."""
 
+import datetime
 import json
 import os
 from dataclasses import asdict
@@ -9,6 +10,12 @@ import streamlit as st
 
 from racionador.clima import obter_clima
 from racionador.modelos import Grupo, Pessoa, Suprimento
+from racionador.persistencia_supabase import (
+    carregar_grupo,
+    criar_cliente,
+    listar_grupos,
+    salvar_grupo,
+)
 from racionador.racionamento import relatorio_completo, sugerir_corte
 
 # --- BLOCO 1: Page config (deve ser a primeira chamada Streamlit) ---
@@ -18,31 +25,54 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- BLOCO 2: Inject API key a partir de st.secrets (se houver) ---
+# --- BLOCO 2: Inject secrets a partir de st.secrets (se houver) ---
 # st.secrets levanta StreamlitSecretNotFoundError quando nao existe
 # .streamlit/secrets.toml local — capturamos para que o app rode
-# tanto no Streamlit Cloud (com secret configurado no painel) quanto
-# localmente (lendo a env var setada manualmente no terminal).
+# tanto no Streamlit Cloud (com secrets configurados no painel) quanto
+# localmente (lendo as env vars setadas manualmente no terminal).
 try:
-    if "OPENWEATHER_API_KEY" in st.secrets:
-        os.environ["OPENWEATHER_API_KEY"] = st.secrets["OPENWEATHER_API_KEY"]
+    for _secret in ("OPENWEATHER_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"):
+        if _secret in st.secrets:
+            os.environ[_secret] = st.secrets[_secret]
 except FileNotFoundError:
     pass
 
-# --- BLOCO 3: Session state ---
+# --- BLOCO 3: Session state e persistência Supabase ---
 if "grupo" not in st.session_state:
     st.session_state.grupo = None
+
+
+@st.cache_resource
+def _obter_cliente_supabase():
+    """Cria (uma única vez por processo) o client do Supabase.
+
+    Retorna None quando as credenciais estão ausentes ou inválidas —
+    nesse caso o app opera em modo offline, apenas com session_state.
+    """
+    return criar_cliente()
+
+
+def _persistir(grupo: Grupo) -> None:
+    """Salva o grupo no Supabase, se houver client; avisa em caso de falha."""
+    client = _obter_cliente_supabase()
+    if client is None:
+        return
+    if not salvar_grupo(grupo, client):
+        st.warning("⚠️ Não foi possível salvar no banco — alterações mantidas apenas na sessão.")
 
 
 # --- BLOCO 4: Funções auxiliares puras ---
 
 
 def _grupo_para_json(grupo: Grupo) -> str:
-    return json.dumps(asdict(grupo), ensure_ascii=False, indent=2)
+    return json.dumps(asdict(grupo), ensure_ascii=False, indent=2, default=str)
 
 
 def _json_para_grupo(data: dict) -> Grupo:
     pessoas = [Pessoa(**d) for d in data["pessoas"]]
+    for d in data["suprimentos"]:
+        if d.get("validade"):
+            d["validade"] = datetime.date.fromisoformat(d["validade"])
     suprimentos = [Suprimento(**d) for d in data["suprimentos"]]
     return Grupo(
         nome_grupo=data["nome_grupo"],
@@ -60,12 +90,26 @@ def _grupo_exemplo() -> Grupo:
         Pessoa(nome="Maria", idade=67),
     ]
     grupo.suprimentos = [
-        Suprimento(nome="Água", quantidade_atual=20, consumo_diario_padrao=2.0, unidade_medida="L"),
         Suprimento(
-            nome="Arroz", quantidade_atual=5, consumo_diario_padrao=0.3, unidade_medida="kg"
+            nome="Água",
+            quantidade_atual=20,
+            consumo_diario_padrao=2.0,
+            unidade_medida="L",
+            categoria="agua",
         ),
         Suprimento(
-            nome="Medicamento", quantidade_atual=10, consumo_diario_padrao=1.0, unidade_medida="un"
+            nome="Arroz",
+            quantidade_atual=5,
+            consumo_diario_padrao=0.3,
+            unidade_medida="kg",
+            categoria="comida",
+        ),
+        Suprimento(
+            nome="Medicamento",
+            quantidade_atual=10,
+            consumo_diario_padrao=1.0,
+            unidade_medida="un",
+            categoria="remedio",
         ),
     ]
     return grupo
@@ -75,18 +119,43 @@ def _grupo_exemplo() -> Grupo:
 
 
 def _renderizar_sidebar() -> None:
+    client = _obter_cliente_supabase()
+
     with st.sidebar:
         st.header("⚙️ Configurações")
 
-        nome_atual = st.session_state.grupo.nome_grupo if st.session_state.grupo else ""
-        label_btn = "Renomear grupo" if st.session_state.grupo else "Criar grupo"
-        novo_nome = st.text_input("Nome do grupo", value=nome_atual, key="sidebar_nome_grupo")
-        if st.button(label_btn, key="btn_criar_renomear") and novo_nome.strip():
-            if st.session_state.grupo is None:
-                st.session_state.grupo = Grupo(nome_grupo=novo_nome.strip())
+        if client is not None:
+            nomes_grupos = listar_grupos(client)
+            if nomes_grupos:
+                nome_sel = st.selectbox("Grupos no banco", nomes_grupos, key="sidebar_sel_grupo")
+                if st.button("Carregar grupo", key="btn_carregar_grupo"):
+                    grupo = carregar_grupo(nome_sel, client)
+                    if grupo is not None:
+                        st.session_state.grupo = grupo
+                        st.rerun()
+                    else:
+                        st.error(f"Não foi possível carregar o grupo '{nome_sel}' do banco.")
             else:
-                st.session_state.grupo.nome_grupo = novo_nome.strip()
-            st.rerun()
+                st.caption("Nenhum grupo no banco ainda.")
+
+            novo_nome = st.text_input("Novo grupo", key="sidebar_nome_grupo")
+            if st.button("Criar grupo", key="btn_criar_grupo") and novo_nome.strip():
+                grupo = Grupo(nome_grupo=novo_nome.strip())
+                _persistir(grupo)
+                st.session_state.grupo = grupo
+                st.rerun()
+        else:
+            st.warning("🔌 Banco indisponível — modo offline (dados só nesta sessão).")
+
+            nome_atual = st.session_state.grupo.nome_grupo if st.session_state.grupo else ""
+            label_btn = "Renomear grupo" if st.session_state.grupo else "Criar grupo"
+            novo_nome = st.text_input("Nome do grupo", value=nome_atual, key="sidebar_nome_grupo")
+            if st.button(label_btn, key="btn_criar_renomear") and novo_nome.strip():
+                if st.session_state.grupo is None:
+                    st.session_state.grupo = Grupo(nome_grupo=novo_nome.strip())
+                else:
+                    st.session_state.grupo.nome_grupo = novo_nome.strip()
+                st.rerun()
 
         st.divider()
 
@@ -102,6 +171,7 @@ def _renderizar_sidebar() -> None:
             and nova_loc.strip()
         ):
             st.session_state.grupo.localizacao = nova_loc.strip()
+            _persistir(st.session_state.grupo)
             st.rerun()
 
         st.divider()
@@ -120,6 +190,7 @@ def _renderizar_sidebar() -> None:
             try:
                 data = json.loads(arquivo.read().decode("utf-8"))
                 st.session_state.grupo = _json_para_grupo(data)
+                _persistir(st.session_state.grupo)
                 st.success("Grupo carregado com sucesso!")
                 st.rerun()
             except (ValueError, KeyError) as e:
@@ -127,8 +198,12 @@ def _renderizar_sidebar() -> None:
 
         st.divider()
 
-        st.markdown("[📂 Repositório GitHub](https://github.com/La-Ghosta/racionador-supri)")
-        st.markdown("[🐛 Issue #1](https://github.com/La-Ghosta/racionador-supri/issues/1)")
+        st.markdown(
+            "[📂 Repositório GitHub](https://github.com/La-Ghosta/racionamento-guerra-inteligente)"
+        )
+        st.markdown(
+            "[🐛 Issues](https://github.com/La-Ghosta/racionamento-guerra-inteligente/issues)"
+        )
 
 
 # --- BLOCO 6: Aba Início ---
@@ -144,6 +219,7 @@ def _aba_inicio() -> None:
     if st.session_state.grupo is None:
         if st.button("📂 Carregar dados de exemplo"):
             st.session_state.grupo = _grupo_exemplo()
+            _persistir(st.session_state.grupo)
             st.rerun()
     else:
         grupo = st.session_state.grupo
@@ -155,6 +231,7 @@ def _aba_inicio() -> None:
             st.caption(f"📍 Localização: {grupo.localizacao}")
         if st.button("🔄 Recarregar dados de exemplo"):
             st.session_state.grupo = _grupo_exemplo()
+            _persistir(st.session_state.grupo)
             st.rerun()
 
 
@@ -179,6 +256,7 @@ def _aba_pessoas() -> None:
                 try:
                     pessoa = Pessoa(nome=nome.strip(), idade=int(idade))
                     grupo.pessoas.append(pessoa)
+                    _persistir(grupo)
                     st.success(
                         f"'{pessoa.nome}' adicionada (fator de consumo: {pessoa.fator_consumo:.1f})"
                     )
@@ -199,6 +277,7 @@ def _aba_pessoas() -> None:
             col3.write(f"fator {pessoa.fator_consumo:.1f}")
             if col4.button("Remover", key=f"remover_pessoa_{i}"):
                 grupo.pessoas.pop(i)
+                _persistir(grupo)
                 st.rerun()
 
 
@@ -220,6 +299,9 @@ def _aba_suprimentos() -> None:
         col3, col4 = st.columns(2)
         quantidade = col3.number_input("Quantidade atual", min_value=0.0, step=0.1, value=0.0)
         consumo = col4.number_input("Consumo diário por adulto", min_value=0.0, step=0.1, value=0.0)
+        col5, col6 = st.columns(2)
+        categoria = col5.text_input("Categoria (opcional)", value="outro")
+        validade = col6.date_input("Validade (opcional)", value=None)
         submitted = st.form_submit_button("Adicionar")
         if submitted:
             if nome.strip() and unidade.strip():
@@ -229,8 +311,11 @@ def _aba_suprimentos() -> None:
                         quantidade_atual=quantidade,
                         consumo_diario_padrao=consumo,
                         unidade_medida=unidade.strip(),
+                        categoria=categoria.strip() or "outro",
+                        validade=validade,
                     )
                     grupo.suprimentos.append(sup)
+                    _persistir(grupo)
                     st.success(f"'{sup.nome}' adicionado.")
                     st.rerun()
                 except ValueError as e:
@@ -244,6 +329,10 @@ def _aba_suprimentos() -> None:
     else:
         for i, sup in enumerate(grupo.suprimentos):
             with st.expander(f"{sup.nome} — {sup.quantidade_atual} {sup.unidade_medida}"):
+                detalhes = f"Categoria: {sup.categoria}"
+                if sup.validade:
+                    detalhes += f" · Validade: {sup.validade.isoformat()}"
+                st.caption(detalhes)
                 nova_qtd = st.number_input(
                     f"Nova quantidade ({sup.unidade_medida})",
                     value=float(sup.quantidade_atual),
@@ -254,12 +343,14 @@ def _aba_suprimentos() -> None:
                 col1, col2 = st.columns(2)
                 if col1.button("Atualizar quantidade", key=f"atualizar_{i}"):
                     sup.quantidade_atual = nova_qtd
+                    _persistir(grupo)
                     st.success(
                         f"Quantidade de '{sup.nome}' atualizada para {nova_qtd} {sup.unidade_medida}."
                     )
                     st.rerun()
                 if col2.button("Remover suprimento", key=f"remover_sup_{i}"):
                     grupo.suprimentos.pop(i)
+                    _persistir(grupo)
                     st.rerun()
 
 
