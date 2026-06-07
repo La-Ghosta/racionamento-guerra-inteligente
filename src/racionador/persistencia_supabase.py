@@ -125,3 +125,16 @@ def listar_grupos(client: Any) -> list[str]:
         return [linha["nome"] for linha in resultado.data]
     except Exception:
         return []
+
+
+def carregar_todos_grupos(client: Any) -> list[Grupo]:
+    """Carrega todos os grupos cadastrados, ignorando os que falharem.
+
+    Retorna lista vazia em qualquer falha de conexão/API.
+    """
+    try:
+        nomes = listar_grupos(client)
+        grupos = (carregar_grupo(nome, client) for nome in nomes)
+        return [g for g in grupos if g is not None]
+    except Exception:
+        return []
