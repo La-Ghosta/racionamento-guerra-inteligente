@@ -1,8 +1,8 @@
-"""Testes das dataclasses Pessoa e Suprimento."""
+"""Testes das dataclasses Pessoa, Suprimento e Grupo."""
 
 import pytest
 
-from racionador.modelos import Pessoa, Suprimento
+from racionador.modelos import Grupo, Pessoa, Suprimento
 
 
 def test_pessoa_adulta_tem_fator_um():
@@ -42,3 +42,15 @@ def test_suprimento_consumo_negativo_lanca_value_error():
         Suprimento(
             nome="Agua", quantidade_atual=10.0, consumo_diario_padrao=-1.0, unidade_medida="L"
         )
+
+
+def test_grupo_tem_defaults_de_coordenacao():
+    g = Grupo(nome_grupo="Alpha")
+    assert g.regiao == ""
+    assert g.pedido_ajuda is False
+
+
+def test_grupo_aceita_regiao_e_pedido_ajuda():
+    g = Grupo(nome_grupo="Bravo", regiao="Centro-Oeste", pedido_ajuda=True)
+    assert g.regiao == "Centro-Oeste"
+    assert g.pedido_ajuda is True

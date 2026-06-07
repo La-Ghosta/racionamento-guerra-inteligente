@@ -43,7 +43,12 @@ def salvar_grupo(grupo: Grupo, client: Any) -> bool:
         resultado = (
             client.table("grupos")
             .upsert(
-                {"nome": grupo.nome_grupo, "localizacao": grupo.localizacao},
+                {
+                    "nome": grupo.nome_grupo,
+                    "localizacao": grupo.localizacao,
+                    "regiao": grupo.regiao,
+                    "pedido_ajuda": grupo.pedido_ajuda,
+                },
                 on_conflict="nome",
             )
             .execute()
@@ -102,6 +107,9 @@ def carregar_grupo(nome: str, client: Any) -> Grupo | None:
             pessoas=pessoas,
             suprimentos=suprimentos,
             localizacao=linha_grupo.get("localizacao"),
+            # Defaults seguros: coluna nula ou ausente vira "" / False.
+            regiao=linha_grupo.get("regiao") or "",
+            pedido_ajuda=bool(linha_grupo.get("pedido_ajuda")),
         )
     except Exception:
         return None
@@ -115,5 +123,18 @@ def listar_grupos(client: Any) -> list[str]:
     try:
         resultado = client.table("grupos").select("nome").order("nome").execute()
         return [linha["nome"] for linha in resultado.data]
+    except Exception:
+        return []
+
+
+def carregar_todos_grupos(client: Any) -> list[Grupo]:
+    """Carrega todos os grupos cadastrados, ignorando os que falharem.
+
+    Retorna lista vazia em qualquer falha de conexão/API.
+    """
+    try:
+        nomes = listar_grupos(client)
+        grupos = (carregar_grupo(nome, client) for nome in nomes)
+        return [g for g in grupos if g is not None]
     except Exception:
         return []

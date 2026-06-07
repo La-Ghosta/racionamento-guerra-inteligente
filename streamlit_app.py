@@ -4,14 +4,19 @@ import datetime
 import json
 import os
 from dataclasses import asdict
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
 
-from racionador.clima import obter_clima
+from crt_ui import classe_status, info, linha, load_theme, secao
+from racionador.clima import geocodificar, obter_clima
+from racionador.coordenacao import visao_coordenador
+from racionador.mapa import montar_dados_mapa
 from racionador.modelos import Grupo, Pessoa, Suprimento
 from racionador.persistencia_supabase import (
     carregar_grupo,
+    carregar_todos_grupos,
     criar_cliente,
     listar_grupos,
     salvar_grupo,
@@ -24,6 +29,7 @@ st.set_page_config(
     page_icon="📦",
     layout="wide",
 )
+load_theme()
 
 # --- BLOCO 2: Inject secrets a partir de st.secrets (se houver) ---
 # st.secrets levanta StreamlitSecretNotFoundError quando nao existe
@@ -79,6 +85,8 @@ def _json_para_grupo(data: dict) -> Grupo:
         pessoas=pessoas,
         suprimentos=suprimentos,
         localizacao=data.get("localizacao"),
+        regiao=data.get("regiao", ""),
+        pedido_ajuda=bool(data.get("pedido_ajuda", False)),
     )
 
 
@@ -174,6 +182,28 @@ def _renderizar_sidebar() -> None:
             _persistir(st.session_state.grupo)
             st.rerun()
 
+        regiao_atual = st.session_state.grupo.regiao if st.session_state.grupo else ""
+        nova_regiao = st.text_input(
+            "Região (coordenação)", value=regiao_atual, key="sidebar_regiao"
+        )
+        if st.button("Definir região", key="btn_definir_regiao") and st.session_state.grupo:
+            st.session_state.grupo.regiao = nova_regiao.strip()
+            _persistir(st.session_state.grupo)
+            st.rerun()
+
+        if st.session_state.grupo:
+            # Toggle dinâmico: a flag muda conforme a situação do grupo evolui,
+            # então persiste imediatamente, sem botão de confirmação.
+            pedido = st.toggle(
+                "🆘 Pedido de ajuda",
+                value=st.session_state.grupo.pedido_ajuda,
+                key="sidebar_pedido_ajuda",
+            )
+            if pedido != st.session_state.grupo.pedido_ajuda:
+                st.session_state.grupo.pedido_ajuda = pedido
+                _persistir(st.session_state.grupo)
+                st.rerun()
+
         st.divider()
 
         if st.session_state.grupo:
@@ -227,8 +257,20 @@ def _aba_inicio() -> None:
         col1.metric("Grupo", grupo.nome_grupo)
         col2.metric("Pessoas", len(grupo.pessoas))
         col3.metric("Suprimentos", len(grupo.suprimentos))
+        linhas_info = []
         if grupo.localizacao:
-            st.caption(f"📍 Localização: {grupo.localizacao}")
+            linhas_info.append(info("LOCALIZAÇÃO", grupo.localizacao))
+        linhas_info.append(info("REGIÃO", grupo.regiao or "NÃO DEFINIDA"))
+        if grupo.pedido_ajuda:
+            linhas_info.append(
+                '<div class="log-line">'
+                '<span class="label" style="color:var(--crit);text-shadow:0 0 6px var(--crit)">PEDIDO DE AJUDA</span>'
+                '<span class="dots"></span>'
+                '<span class="badge sos">SOS</span></div>'
+            )
+        else:
+            linhas_info.append(info("PEDIDO DE AJUDA", "NÃO", estado="sem-dados"))
+        st.markdown('<div class="crt">' + "".join(linhas_info) + "</div>", unsafe_allow_html=True)
         if st.button("🔄 Recarregar dados de exemplo"):
             st.session_state.grupo = _grupo_exemplo()
             _persistir(st.session_state.grupo)
@@ -356,8 +398,7 @@ def _aba_suprimentos() -> None:
 
 # --- BLOCO 9: Aba Status ---
 
-_STATUS_EMOJI = {"OK": "🟢", "ALERTA": "🟡", "CRITICO": "🔴"}
-_STATUS_LABEL = {"OK": "OK", "ALERTA": "ALERTA", "CRITICO": "CRÍTICO"}
+_STATUS_LABEL = {"OK": "OK", "ALERTA": "ALERTA", "CRITICO": "CRÍTICO", "SEM_DADOS": "SEM DADOS"}
 
 
 def _aba_status() -> None:
@@ -373,24 +414,21 @@ def _aba_status() -> None:
         st.error(str(e))
         return
 
-    linhas = []
-    for nome_sup, dados in relatorio.items():
-        emoji = _STATUS_EMOJI[dados["status"]]
-        label = _STATUS_LABEL[dados["status"]]
+    linhas_log = []
+    for i, (nome_sup, dados) in enumerate(relatorio.items(), start=1):
         dias = dados["dias_restantes"]
         dias_str = str(int(dias)) if dias != float("inf") else "∞"
-        corte = dados["corte_sugerido_pct"]
-        linhas.append(
-            {
-                "Suprimento": nome_sup,
-                "Quantidade": f"{dados['quantidade_atual']} {dados['unidade_medida']}",
-                "Dias restantes": dias_str,
-                "Status": f"{emoji} {label}",
-                "Corte sugerido": f"{corte:.1f}%" if corte > 0 else "—",
-            }
-        )
+        if dias_str == "∞":
+            tag = "∞"
+        else:
+            tag = f"{dias_str} DIA" if dias_str == "1" else f"{dias_str} DIAS"
+        linhas_log.append(linha(i, nome_sup, tag, estado=classe_status(dados["status"])))
 
-    st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+    if not linhas_log:
+        linhas_log = [linha(1, "SEM SUPRIMENTOS", "—", estado="sem-dados")]
+
+    html = '<div class="crt">' + secao("ESTOQUE", linhas_log) + "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
     if grupo.localizacao:
         with st.spinner(f"Consultando clima em {grupo.localizacao}…"):
@@ -442,14 +480,96 @@ def _aba_sugestoes() -> None:
             st.error(str(e))
 
 
-# --- BLOCO 11: Main ---
+# --- BLOCO 11: Aba Coordenação ---
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _geocodificar_cacheado(cidade: str) -> tuple[float, float] | None:
+    """Cache por nome de cidade para não repetir chamadas à API de geocoding.
+
+    O TTL evita que um None (falha transitória/offline) fique cacheado pra sempre.
+    """
+    return geocodificar(cidade)
+
+
+def _aba_coordenacao() -> None:
+    client = _obter_cliente_supabase()
+    if client is None:
+        st.warning("🔌 Banco indisponível — a visão de coordenador precisa do Supabase.")
+        return
+
+    grupos = carregar_todos_grupos(client)
+    if not grupos:
+        st.info("Nenhum grupo no banco ainda.")
+        return
+
+    visao = visao_coordenador(grupos)
+
+    st.header("🗺️ Visão do coordenador")
+    st.caption(f"{len(grupos)} grupo(s) no banco, agrupados por região e ordenados por urgência.")
+
+    blocos = []
+    for regiao, resumos in visao.por_regiao.items():
+        linhas_grp = [
+            linha(
+                i,
+                r.nome_grupo,
+                _STATUS_LABEL.get(r.status, r.status),
+                estado=classe_status(r.status),
+                sos=r.pedido_ajuda,
+                href=f"?grupo={quote(r.nome_grupo)}",
+            )
+            for i, r in enumerate(resumos, start=1)
+        ]
+        blocos.append(secao((regiao or "SEM REGIÃO").upper(), linhas_grp))
+    st.markdown('<div class="crt">' + "".join(blocos) + "</div>", unsafe_allow_html=True)
+
+    st.divider()
+
+    # Mapa offline-first: sem chave de API / offline / nenhuma cidade
+    # geocodificada → some o mapa, a lista por região acima continua de pé.
+    dados_mapa = montar_dados_mapa(visao.resumos, _geocodificar_cacheado)
+    if dados_mapa:
+        df_mapa = pd.DataFrame(dados_mapa)
+        st.markdown(
+            '<div class="crt"><div class="section-title" '
+            'style="position:static;display:inline-block;margin-bottom:.4rem">'
+            "LIVE MAP [GPS]</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.map(df_mapa, latitude="lat", longitude="lon", color="cor")
+    else:
+        st.caption(
+            "🌐 Mapa indisponível (sem chave de API, offline ou nenhuma cidade geocodificada)."
+        )
+
+
+# --- BLOCO 12: Main ---
 
 
 def main() -> None:
+    client = _obter_cliente_supabase()
+
+    grupo_q = st.query_params.get("grupo")
+    if grupo_q:
+        g = None
+        if client is not None:
+            try:
+                g = carregar_grupo(grupo_q, client)
+            except Exception:
+                g = None
+        if g is not None:
+            st.session_state.grupo = g
+            st.session_state["aba_ativa"] = "📊 Status"
+        del st.query_params["grupo"]
+        st.rerun()
+
     _renderizar_sidebar()
 
-    aba1, aba2, aba3, aba4, aba5 = st.tabs(
-        ["🏠 Início", "👥 Pessoas", "📦 Suprimentos", "📊 Status", "✂️ Sugestões"]
+    aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(
+        ["🏠 Início", "👥 Pessoas", "📦 Suprimentos", "📊 Status", "✂️ Sugestões", "🗺️ Coordenação"],
+        key="aba_ativa",
+        on_change="rerun",
     )
 
     with aba1:
@@ -462,6 +582,8 @@ def main() -> None:
         _aba_status()
     with aba5:
         _aba_sugestoes()
+    with aba6:
+        _aba_coordenacao()
 
 
 if __name__ == "__main__":

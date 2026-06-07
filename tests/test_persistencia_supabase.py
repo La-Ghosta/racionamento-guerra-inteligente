@@ -1,13 +1,14 @@
 """Testes da persistencia Supabase com client mockado (sem banco real)."""
 
 import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from racionador.modelos import Grupo, Pessoa, Suprimento
 from racionador.persistencia_supabase import (
     carregar_grupo,
+    carregar_todos_grupos,
     criar_cliente,
     listar_grupos,
     salvar_grupo,
@@ -18,6 +19,8 @@ def _grupo_completo() -> Grupo:
     return Grupo(
         nome_grupo="Equipe Alfa",
         localizacao="Kyiv",
+        regiao="Norte",
+        pedido_ajuda=True,
         pessoas=[Pessoa(nome="Carlos", idade=40)],
         suprimentos=[
             Suprimento(
@@ -45,7 +48,14 @@ def cliente_carregar():
     """Client mockado que devolve dados distintos por tabela."""
     tabela_grupos = MagicMock()
     tabela_grupos.select.return_value.eq.return_value.execute.return_value.data = [
-        {"id": 7, "nome": "Equipe Alfa", "localizacao": "Kyiv", "criado_em": "2026-06-01"}
+        {
+            "id": 7,
+            "nome": "Equipe Alfa",
+            "localizacao": "Kyiv",
+            "regiao": "Norte",
+            "pedido_ajuda": True,
+            "criado_em": "2026-06-01",
+        }
     ]
 
     tabela_pessoas = MagicMock()
@@ -99,7 +109,12 @@ def test_salvar_grupo_happy_path(cliente_salvar):
 
     chain = cliente_salvar.table.return_value
     chain.upsert.assert_called_once_with(
-        {"nome": "Equipe Alfa", "localizacao": "Kyiv"},
+        {
+            "nome": "Equipe Alfa",
+            "localizacao": "Kyiv",
+            "regiao": "Norte",
+            "pedido_ajuda": True,
+        },
         on_conflict="nome",
     )
     chain.delete.return_value.eq.assert_any_call("grupo_id", 7)
@@ -141,6 +156,8 @@ def test_carregar_grupo_happy_path(cliente_carregar):
     assert grupo is not None
     assert grupo.nome_grupo == "Equipe Alfa"
     assert grupo.localizacao == "Kyiv"
+    assert grupo.regiao == "Norte"
+    assert grupo.pedido_ajuda is True
 
     assert len(grupo.pessoas) == 1
     assert grupo.pessoas[0].nome == "Carlos"
@@ -155,6 +172,27 @@ def test_carregar_grupo_happy_path(cliente_carregar):
     assert sup.unidade_medida == "L"
     assert sup.categoria == "agua"
     assert sup.validade == datetime.date(2026, 12, 31)
+
+
+def test_carregar_grupo_colunas_nulas_usam_defaults():
+    """Linha antiga (antes da migração) com regiao/pedido_ajuda nulos → defaults."""
+    tabela_grupos = MagicMock()
+    tabela_grupos.select.return_value.eq.return_value.execute.return_value.data = [
+        {"id": 7, "nome": "Legado", "localizacao": None, "regiao": None, "pedido_ajuda": None}
+    ]
+
+    tabela_vazia = MagicMock()
+    tabela_vazia.select.return_value.eq.return_value.execute.return_value.data = []
+
+    tabelas = {"grupos": tabela_grupos, "pessoas": tabela_vazia, "suprimentos": tabela_vazia}
+    cliente = MagicMock()
+    cliente.table.side_effect = tabelas.__getitem__
+
+    grupo = carregar_grupo("Legado", cliente)
+
+    assert grupo is not None
+    assert grupo.regiao == ""
+    assert grupo.pedido_ajuda is False
 
 
 def test_carregar_grupo_inexistente_retorna_none():
@@ -186,3 +224,52 @@ def test_listar_grupos_erro_conexao_retorna_lista_vazia():
     cliente = MagicMock()
     cliente.table.side_effect = Exception("connection refused")
     assert listar_grupos(cliente) == []
+
+
+# --- carregar_todos_grupos ---
+
+
+def test_carregar_todos_grupos_happy_path():
+    cliente = MagicMock()
+    grupos = {"Alfa": Grupo(nome_grupo="Alfa"), "Bravo": Grupo(nome_grupo="Bravo")}
+
+    with (
+        patch(
+            "racionador.persistencia_supabase.listar_grupos", return_value=["Alfa", "Bravo"]
+        ) as mock_listar,
+        patch(
+            "racionador.persistencia_supabase.carregar_grupo",
+            side_effect=lambda nome, _client: grupos[nome],
+        ) as mock_carregar,
+    ):
+        resultado = carregar_todos_grupos(cliente)
+
+    assert [g.nome_grupo for g in resultado] == ["Alfa", "Bravo"]
+    mock_listar.assert_called_once_with(cliente)
+    assert [chamada.args for chamada in mock_carregar.call_args_list] == [
+        ("Alfa", cliente),
+        ("Bravo", cliente),
+    ]
+
+
+def test_carregar_todos_grupos_filtra_none():
+    """Grupo que falha ao carregar (None) e descartado sem derrubar os demais."""
+    cliente = MagicMock()
+    por_nome = {"Alfa": Grupo(nome_grupo="Alfa"), "Bravo": None}
+
+    with (
+        patch("racionador.persistencia_supabase.listar_grupos", return_value=["Alfa", "Bravo"]),
+        patch(
+            "racionador.persistencia_supabase.carregar_grupo",
+            side_effect=lambda nome, _client: por_nome[nome],
+        ),
+    ):
+        resultado = carregar_todos_grupos(cliente)
+
+    assert [g.nome_grupo for g in resultado] == ["Alfa"]
+
+
+def test_carregar_todos_grupos_erro_conexao_retorna_lista_vazia():
+    cliente = MagicMock()
+    cliente.table.side_effect = Exception("connection refused")
+    assert carregar_todos_grupos(cliente) == []
