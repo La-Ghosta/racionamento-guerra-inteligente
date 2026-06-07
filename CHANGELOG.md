@@ -5,6 +5,31 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 O formato segue a convenção de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.0.0] - 2026-06-07 — Etapa 3: Banco de dados (Supabase) e Feature 4 (coordenação entre grupos)
+
+### Adicionado
+- Camada de persistência em Supabase (PostgreSQL): `persistencia_supabase.py` com
+  `criar_cliente`, `salvar_grupo`, `carregar_grupo` e `listar_grupos` (client injetável),
+  usada pela camada web.
+- Tabelas normalizadas no Supabase: `grupos`, `pessoas`, `suprimentos`.
+- Campos `categoria` e `validade` em `Suprimento` (modelos, persistência JSON com
+  round-trip e retrocompatibilidade, e comandos `add-suprimento`/`listar` da CLI).
+- Suíte de testes ampliada para 40 testes, incluindo `tests/test_persistencia_supabase.py`
+  (mockado com `unittest.mock`; sem banco real no CI).
+- Dependência de produção: `supabase` (cliente Python). <!-- confirmar o pin exato no pyproject -->
+
+### Mudado
+- Persistência dividida por interface: a CLI segue em JSON local (offline-first) e a
+  camada web (`streamlit_app.py`) passa a usar Supabase, com degradação graciosa para
+  modo offline quando o banco está indisponível (mesmo padrão do `clima.py`).
+- Repositório migrado para um projeto standalone
+  (`racionamento-guerra-inteligente`), clonado com histórico do `racionador-supri` (não é fork).
+- Novo deploy público: https://racionamento-guerra-inteligente.streamlit.app/
+- Versão do projeto: 1.1.0 → 2.0.0.
+
+### Vinculado
+<!-- adicionar aqui o link do PR da Feature 4 ao abri-lo no fim da Parte 5 -->
+
 ## [1.1.0] - 2026-05-07 — Etapa 2 do Bootcamp
 
 ### Adicionado

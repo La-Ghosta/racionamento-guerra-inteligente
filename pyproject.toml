@@ -1,6 +1,6 @@
 [project]
 name = "racionador-supri"
-version = "1.1.0"
+version = "2.0.0"
 description = "Racionamento de suprimentos em zonas de conflito humanitário"
 readme = "README.md"
 requires-python = ">=3.10"
