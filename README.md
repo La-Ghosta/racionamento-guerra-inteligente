@@ -31,21 +31,48 @@ Python · Typer + Rich (CLI) · Streamlit (web) · Supabase / PostgreSQL · Open
 
 ## Autores
 
-| Integrante        |
-| ----------------- |
+| Integrante       |
+|------------------|
 | Guilherme Holanda |
-| Murilo Yuki       |
-| Carlos Eduardo    |
-| Luan Ayres        |
+| Murilo Yuki      |
+| Carlos Eduardo   |
+| Luan Ayres       |
 
-Projeto da Etapa 3 — bootcamp de Python, CEUB.
+Projeto da Etapa 3 — bootcamp II
 
 ## Repositório
 
 https://github.com/La-Ghosta/racionamento-guerra-inteligente
 
----
+## Como usar
 
-## Como baixar e usar
+A forma mais simples é pelo **app ao vivo** (link acima) — não precisa instalar nada.
 
-> 🚧 **Em construção.** O passo a passo de instalação e uso entra aqui quando o projeto estiver concluído.
+### Rodar localmente
+
+Requer **Python 3.10+** e Git.
+
+```bash
+# 1. Clonar o repositório
+git clone https://github.com/La-Ghosta/racionamento-guerra-inteligente.git
+cd racionamento-guerra-inteligente
+
+# 2. Criar e ativar um ambiente virtual
+python -m venv .venv
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Linux / macOS:
+source .venv/bin/activate
+
+# 3. Instalar as dependências
+pip install -r requirements.txt
+
+# 4. Rodar o app
+streamlit run streamlit_app.py
+```
+
+O app abre no navegador. Sem configuração extra ele roda em **modo offline** (o núcleo funciona sem nuvem). Para habilitar a visão de coordenador e o mapa, crie um arquivo `.streamlit/secrets.toml` com as suas chaves:
+
+SUPABASE_URL = "https://..."
+SUPABASE_SERVICE_KEY = "..."
+OPENWEATHER_API_KEY = "..."
