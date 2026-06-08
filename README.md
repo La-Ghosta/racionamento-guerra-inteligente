@@ -6,9 +6,14 @@ Ferramenta para **famílias e grupos isolados em zonas de conflito humanitário*
 
 ## App ao vivo
 
-### → https://racionamento-guerra-inteligente.streamlit.app/
-
 Roda direto no navegador, sem instalar nada.
+
+**Copie e cole a URL na barra de endereços do navegador:**
+
+```
+https://racionamento-guerra-inteligente.streamlit.app/
+```
+
 
 ## O que dá para fazer
 
