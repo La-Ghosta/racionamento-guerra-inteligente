@@ -128,13 +128,57 @@ def listar_grupos(client: Any) -> list[str]:
 
 
 def carregar_todos_grupos(client: Any) -> list[Grupo]:
-    """Carrega todos os grupos cadastrados, ignorando os que falharem.
+    """Carrega todos os grupos em 3 queries (grupos, pessoas, suprimentos).
 
-    Retorna lista vazia em qualquer falha de conexão/API.
+    Junta os filhos em memória por grupo_id, evitando o N+1 de chamar
+    carregar_grupo uma vez por grupo (que fazia 1 + 3*N idas ao banco).
+    Mantém a ordem alfabética por nome. Retorna lista vazia em qualquer
+    falha de conexão/API.
     """
     try:
-        nomes = listar_grupos(client)
-        grupos = (carregar_grupo(nome, client) for nome in nomes)
-        return [g for g in grupos if g is not None]
+        linhas_grupos = client.table("grupos").select("*").order("nome").execute().data
+        if not linhas_grupos:
+            return []
+
+        linhas_pessoas = client.table("pessoas").select("*").execute().data
+        linhas_suprimentos = client.table("suprimentos").select("*").execute().data
+
+        # Indexa os filhos por grupo_id para montar cada grupo sem novas queries.
+        pessoas_por_grupo: dict[Any, list[dict]] = {}
+        for p in linhas_pessoas:
+            pessoas_por_grupo.setdefault(p["grupo_id"], []).append(p)
+
+        suprimentos_por_grupo: dict[Any, list[dict]] = {}
+        for s in linhas_suprimentos:
+            suprimentos_por_grupo.setdefault(s["grupo_id"], []).append(s)
+
+        grupos = []
+        for linha_grupo in linhas_grupos:
+            grupo_id = linha_grupo["id"]
+
+            pessoas = [
+                Pessoa(nome=p["nome"], idade=p["idade"])
+                for p in pessoas_por_grupo.get(grupo_id, [])
+            ]
+
+            suprimentos = []
+            for s in suprimentos_por_grupo.get(grupo_id, []):
+                campos = {k: v for k, v in s.items() if k not in ("id", "grupo_id")}
+                if campos.get("validade"):
+                    campos["validade"] = datetime.date.fromisoformat(campos["validade"])
+                suprimentos.append(Suprimento(**campos))
+
+            grupos.append(
+                Grupo(
+                    nome_grupo=linha_grupo["nome"],
+                    pessoas=pessoas,
+                    suprimentos=suprimentos,
+                    localizacao=linha_grupo.get("localizacao"),
+                    # Defaults seguros: coluna nula ou ausente vira "" / False.
+                    regiao=linha_grupo.get("regiao") or "",
+                    pedido_ajuda=bool(linha_grupo.get("pedido_ajuda")),
+                )
+            )
+        return grupos
     except Exception:
         return []
