@@ -1,7 +1,7 @@
 """Testes da persistencia Supabase com client mockado (sem banco real)."""
 
 import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -229,44 +229,103 @@ def test_listar_grupos_erro_conexao_retorna_lista_vazia():
 # --- carregar_todos_grupos ---
 
 
+def _cliente_todos(linhas_grupos, linhas_pessoas, linhas_suprimentos):
+    """Client mockado para a carga em massa: um mock por tabela, com dados próprios."""
+    tab_grupos = MagicMock()
+    tab_grupos.select.return_value.order.return_value.execute.return_value.data = linhas_grupos
+    tab_pessoas = MagicMock()
+    tab_pessoas.select.return_value.execute.return_value.data = linhas_pessoas
+    tab_suprimentos = MagicMock()
+    tab_suprimentos.select.return_value.execute.return_value.data = linhas_suprimentos
+
+    tabelas = {"grupos": tab_grupos, "pessoas": tab_pessoas, "suprimentos": tab_suprimentos}
+    cliente = MagicMock()
+    cliente.table.side_effect = tabelas.__getitem__
+    return cliente
+
+
 def test_carregar_todos_grupos_happy_path():
-    cliente = MagicMock()
-    grupos = {"Alfa": Grupo(nome_grupo="Alfa"), "Bravo": Grupo(nome_grupo="Bravo")}
+    cliente = _cliente_todos(
+        linhas_grupos=[
+            {
+                "id": 1,
+                "nome": "Alfa",
+                "localizacao": "Kyiv",
+                "regiao": "Norte",
+                "pedido_ajuda": True,
+            },
+            {"id": 2, "nome": "Bravo", "localizacao": None, "regiao": "", "pedido_ajuda": False},
+        ],
+        linhas_pessoas=[
+            {"id": 10, "grupo_id": 1, "nome": "Carlos", "idade": 40},
+            {"id": 11, "grupo_id": 2, "nome": "Ana", "idade": 8},
+        ],
+        linhas_suprimentos=[
+            {
+                "id": 20,
+                "grupo_id": 1,
+                "nome": "Agua",
+                "quantidade_atual": 20.0,
+                "consumo_diario_padrao": 2.0,
+                "unidade_medida": "L",
+                "categoria": "agua",
+                "validade": "2026-12-31",
+            }
+        ],
+    )
 
-    with (
-        patch(
-            "racionador.persistencia_supabase.listar_grupos", return_value=["Alfa", "Bravo"]
-        ) as mock_listar,
-        patch(
-            "racionador.persistencia_supabase.carregar_grupo",
-            side_effect=lambda nome, _client: grupos[nome],
-        ) as mock_carregar,
-    ):
-        resultado = carregar_todos_grupos(cliente)
+    grupos = carregar_todos_grupos(cliente)
 
-    assert [g.nome_grupo for g in resultado] == ["Alfa", "Bravo"]
-    mock_listar.assert_called_once_with(cliente)
-    assert [chamada.args for chamada in mock_carregar.call_args_list] == [
-        ("Alfa", cliente),
-        ("Bravo", cliente),
-    ]
+    assert [g.nome_grupo for g in grupos] == ["Alfa", "Bravo"]
+
+    alfa, bravo = grupos
+    assert alfa.localizacao == "Kyiv"
+    assert alfa.regiao == "Norte"
+    assert alfa.pedido_ajuda is True
+    assert [p.nome for p in alfa.pessoas] == ["Carlos"]
+    assert len(alfa.suprimentos) == 1
+    assert alfa.suprimentos[0].nome == "Agua"
+    assert alfa.suprimentos[0].validade == datetime.date(2026, 12, 31)
+
+    # Filhos agrupados pelo grupo_id certo: Bravo fica com a Ana e sem suprimentos.
+    assert [p.nome for p in bravo.pessoas] == ["Ana"]
+    assert bravo.suprimentos == []
 
 
-def test_carregar_todos_grupos_filtra_none():
-    """Grupo que falha ao carregar (None) e descartado sem derrubar os demais."""
-    cliente = MagicMock()
-    por_nome = {"Alfa": Grupo(nome_grupo="Alfa"), "Bravo": None}
+def test_carregar_todos_grupos_faz_3_queries():
+    """A otimização: 3 queries no total (grupos/pessoas/suprimentos), não 1 + 3*N."""
+    cliente = _cliente_todos(
+        linhas_grupos=[
+            {"id": 1, "nome": "Alfa", "localizacao": None, "regiao": "", "pedido_ajuda": False},
+            {"id": 2, "nome": "Bravo", "localizacao": None, "regiao": "", "pedido_ajuda": False},
+            {"id": 3, "nome": "Charlie", "localizacao": None, "regiao": "", "pedido_ajuda": False},
+        ],
+        linhas_pessoas=[],
+        linhas_suprimentos=[],
+    )
 
-    with (
-        patch("racionador.persistencia_supabase.listar_grupos", return_value=["Alfa", "Bravo"]),
-        patch(
-            "racionador.persistencia_supabase.carregar_grupo",
-            side_effect=lambda nome, _client: por_nome[nome],
-        ),
-    ):
-        resultado = carregar_todos_grupos(cliente)
+    carregar_todos_grupos(cliente)
 
-    assert [g.nome_grupo for g in resultado] == ["Alfa"]
+    assert cliente.table.call_count == 3
+    tabelas = [chamada.args[0] for chamada in cliente.table.call_args_list]
+    assert tabelas == ["grupos", "pessoas", "suprimentos"]
+
+
+def test_carregar_todos_grupos_grupo_sem_filhos_vem_com_listas_vazias():
+    cliente = _cliente_todos(
+        linhas_grupos=[
+            {"id": 9, "nome": "Solo", "localizacao": None, "regiao": "", "pedido_ajuda": False}
+        ],
+        linhas_pessoas=[],
+        linhas_suprimentos=[],
+    )
+
+    grupos = carregar_todos_grupos(cliente)
+
+    assert len(grupos) == 1
+    assert grupos[0].nome_grupo == "Solo"
+    assert grupos[0].pessoas == []
+    assert grupos[0].suprimentos == []
 
 
 def test_carregar_todos_grupos_erro_conexao_retorna_lista_vazia():
