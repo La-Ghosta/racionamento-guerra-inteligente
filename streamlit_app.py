@@ -483,13 +483,27 @@ def _aba_sugestoes() -> None:
 # --- BLOCO 11: Aba Coordenação ---
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _geocodificar_cacheado(cidade: str) -> tuple[float, float] | None:
-    """Cache por nome de cidade para não repetir chamadas à API de geocoding.
+@st.cache_data(ttl=86400, show_spinner=False)
+def _geocodificar_ok(cidade: str) -> tuple[float, float]:
+    """Geocodifica e cacheia SÓ o sucesso.
 
-    O TTL evita que um None (falha transitória/offline) fique cacheado pra sempre.
+    Em falha levanta LookupError. O st.cache_data não cacheia exceções, então uma
+    falha transitória (timeout, 429, rede no deploy) é re-tentada no próximo render,
+    em vez de ficar presa como None por 1h num processo de nuvem de vida longa.
+    Coordenada de cidade não muda — o sucesso pode ser cacheado por 24h, resolve a pica.
     """
-    return geocodificar(cidade)
+    coords = geocodificar(cidade)
+    if coords is None:
+        raise LookupError(cidade)
+    return coords
+
+
+def _geocodificar_para_mapa(cidade: str) -> tuple[float, float] | None:
+    """Adapta _geocodificar_ok ao contrato de montar_dados_mapa (None = pular)."""
+    try:
+        return _geocodificar_ok(cidade)
+    except LookupError:
+        return None
 
 
 def _aba_coordenacao() -> None:
@@ -526,9 +540,7 @@ def _aba_coordenacao() -> None:
 
     st.divider()
 
-    # Mapa offline-first: sem chave de API / offline / nenhuma cidade
-    # geocodificada → some o mapa, a lista por região acima continua de pé.
-    dados_mapa = montar_dados_mapa(visao.resumos, _geocodificar_cacheado)
+    dados_mapa = montar_dados_mapa(visao.resumos, _geocodificar_para_mapa)
     if dados_mapa:
         df_mapa = pd.DataFrame(dados_mapa)
         st.markdown(
@@ -541,6 +553,19 @@ def _aba_coordenacao() -> None:
     else:
         st.caption(
             "🌐 Mapa indisponível (sem chave de API, offline ou nenhuma cidade geocodificada)."
+        )
+
+    # Nunca deixar um grupo com cidade sumir do mapa em silêncio: um crítico em SOS
+    # que some daqui é perigoso pro coordenador. Lista os que têm localização mas
+    # não viraram ponto (cidade não resolvida nesta tentativa).
+    nomes_no_mapa = {p["nome"] for p in dados_mapa}
+    nao_localizados = [
+        r for r in visao.resumos if r.localizacao and r.nome_grupo not in nomes_no_mapa
+    ]
+    if nao_localizados:
+        st.caption(
+            "⚠️ Sem ponto no mapa (cidade não geocodificada nesta tentativa): "
+            + ", ".join(f"{r.nome_grupo} ({r.localizacao})" for r in nao_localizados)
         )
 
 
@@ -579,11 +604,13 @@ def main() -> None:
     with aba3:
         _aba_suprimentos()
     with aba4:
-        _aba_status()
+        if aba4.open:
+            _aba_status()
     with aba5:
         _aba_sugestoes()
     with aba6:
-        _aba_coordenacao()
+        if aba6.open:
+            _aba_coordenacao()
 
 
 if __name__ == "__main__":
