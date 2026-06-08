@@ -75,6 +75,17 @@ pip install -r requirements.txt
 # 4. Rodar o app
 streamlit run streamlit_app.py
 ```
+### Banco de dados (Supabase)
+
+A visão de coordenador e o mapa usam um banco PostgreSQL no Supabase (opcional —
+sem ele o app funciona offline):
+
+1. Crie um projeto gratuito no [Supabase](https://supabase.com/).
+2. No **SQL Editor**, rode os arquivos de `db/migrations/` em ordem:
+   - `0000_init.sql` — cria as tabelas `grupos`, `pessoas` e `suprimentos`.
+   - `0001_grupos_regiao_pedido_ajuda.sql` — adiciona `regiao` e `pedido_ajuda`.
+3. Em **Settings → API**, copie a `URL` e a `service_role key` para o
+   `secrets.toml` abaixo.
 
 O app abre no navegador. Sem configuração extra ele roda em **modo offline** (o núcleo funciona sem nuvem). Para habilitar a visão de coordenador e o mapa, crie um arquivo `.streamlit/secrets.toml` com as suas chaves:
 
