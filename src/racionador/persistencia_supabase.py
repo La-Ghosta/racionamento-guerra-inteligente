@@ -115,14 +115,31 @@ def carregar_grupo(nome: str, client: Any) -> Grupo | None:
         return None
 
 
+def deletar_grupo(nome: str, client: Any) -> bool:
+    """Apaga um grupo pelo nome; FK ON DELETE CASCADE remove pessoas/suprimentos.
+
+    Retorna True em sucesso e False em qualquer falha de conexão.
+    """
+    try:
+        # Corrigido o ponto antes do delete()
+        client.table("grupos").delete().eq("nome", nome).execute()
+        return True
+    except Exception:  # Corrigido o 'execept'
+        return False
+
+
 def listar_grupos(client: Any) -> list[str]:
     """Lista os nomes dos grupos cadastrados, em ordem alfabética.
 
-    Retorna lista vazia em qualquer falha de conexão/API.
+    Retorna a lista de nomes em sucesso e uma lista vazia em qualquer falha da conexão/API.
     """
     try:
-        resultado = client.table("grupos").select("nome").order("nome").execute()
-        return [linha["nome"] for linha in resultado.data]
+        # Busca apenas a coluna 'nome' e ordena de forma ascendente (alfabética)
+        resposta = client.table("grupos").select("nome").order("nome").execute()
+        
+        # Extrai os nomes do resultado da API
+        nomes = [registro["nome"] for registro in resposta.data]
+        return nomes
     except Exception:
         return []
 
