@@ -136,7 +136,6 @@ def listar_grupos(client: Any) -> list[str]:
     try:
         # Busca apenas a coluna 'nome' e ordena de forma ascendente (alfabética)
         resposta = client.table("grupos").select("nome").order("nome").execute()
-        
         # Extrai os nomes do resultado da API
         nomes = [registro["nome"] for registro in resposta.data]
         return nomes
