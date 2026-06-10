@@ -18,6 +18,7 @@ from racionador.persistencia_supabase import (
     carregar_grupo,
     carregar_todos_grupos,
     criar_cliente,
+    deletar_grupo,
     listar_grupos,
     salvar_grupo,
 )
@@ -274,6 +275,12 @@ def _aba_inicio() -> None:
         if st.button("🔄 Recarregar dados de exemplo"):
             st.session_state.grupo = _grupo_exemplo()
             _persistir(st.session_state.grupo)
+            st.rerun()
+        if st.button("Deletar grupo", key="btn_deletar_grupo"):
+            client = _obter_cliente_supabase()
+            if client is not None:
+                deletar_grupo(grupo.nome_grupo, client)
+            st.session_state.grupo = None
             st.rerun()
 
 

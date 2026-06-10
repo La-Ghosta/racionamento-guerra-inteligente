@@ -115,6 +115,19 @@ def carregar_grupo(nome: str, client: Any) -> Grupo | None:
         return None
 
 
+def deletar_grupo(nome: str, client: Any) -> bool:
+    """Apaga um grupo pelo nome; FK ON DELETE CASCADE remove pessoas/suprimentos.
+
+    Retorna True em sucesso e False em qualquer falha de conexão.
+    """
+    try:
+        # Corrigido o ponto antes do delete()
+        client.table("grupos").delete().eq("nome", nome).execute()
+        return True
+    except Exception:  # Corrigido o 'execept'
+        return False
+
+
 def listar_grupos(client: Any) -> list[str]:
     """Lista os nomes dos grupos cadastrados, em ordem alfabética.
 

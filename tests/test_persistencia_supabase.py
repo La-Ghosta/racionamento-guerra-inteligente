@@ -10,6 +10,7 @@ from racionador.persistencia_supabase import (
     carregar_grupo,
     carregar_todos_grupos,
     criar_cliente,
+    deletar_grupo,
     listar_grupos,
     salvar_grupo,
 )
@@ -332,3 +333,17 @@ def test_carregar_todos_grupos_erro_conexao_retorna_lista_vazia():
     cliente = MagicMock()
     cliente.table.side_effect = Exception("connection refused")
     assert carregar_todos_grupos(cliente) == []
+
+
+def test_deletar_grupo_happy_path():
+    cliente = MagicMock()
+    assert deletar_grupo("Equipe Alfa", cliente) is True
+    cliente.table.assert_called_once_with("grupos")
+    cliente.table.return_value.delete.return_value.eq.assert_called_once_with("nome", "Equipe Alfa")
+    cliente.table.return_value.delete.return_value.eq.return_value.execute.assert_called_once()
+
+
+def test_deletar_grupo_erro_conexao_retorna_false():
+    cliente = MagicMock()
+    cliente.table.side_effect = Exception("connection refused")
+    assert deletar_grupo("Equipe Alfa", cliente) is False
