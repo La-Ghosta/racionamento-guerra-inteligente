@@ -75,7 +75,7 @@
 @keyframes blink { 50% { opacity: .35; } }
 
 .st-key-btn_deletar_grupo button {
-    background: var(--crit);
-    color: var(--bg);
-    border-color: var(--crit);
+  background: var(--crit);
+  color: var(--bg);
+  border-color: var(--crit);
 }

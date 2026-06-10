@@ -131,14 +131,11 @@ def deletar_grupo(nome: str, client: Any) -> bool:
 def listar_grupos(client: Any) -> list[str]:
     """Lista os nomes dos grupos cadastrados, em ordem alfabética.
 
-    Retorna a lista de nomes em sucesso e uma lista vazia em qualquer falha da conexão/API.
+    Retorna lista vazia em qualquer falha de conexão/API.
     """
     try:
-        # Busca apenas a coluna 'nome' e ordena de forma ascendente (alfabética)
-        resposta = client.table("grupos").select("nome").order("nome").execute()
-        # Extrai os nomes do resultado da API
-        nomes = [registro["nome"] for registro in resposta.data]
-        return nomes
+        resultado = client.table("grupos").select("nome").order("nome").execute()
+        return [linha["nome"] for linha in resultado.data]
     except Exception:
         return []
 

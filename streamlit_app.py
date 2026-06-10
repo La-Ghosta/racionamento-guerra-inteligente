@@ -274,13 +274,12 @@ def _aba_inicio() -> None:
                 st.session_state.grupo = _grupo_exemplo()
                 _persistir(st.session_state.grupo)
                 st.rerun()
-
-            if st.button("Deletar grupo", key="btn_deletar_grupo"):
-                client = _obter_cliente_supabase()
-                if client is not None:
-                    deletar_grupo(grupo.nome_grupo, client)
-                    st.session_state.grupo = None
-                    st.rerun()
+        if st.button("Deletar grupo", key="btn_deletar_grupo"):
+            client = _obter_cliente_supabase()
+            if client is not None:
+                deletar_grupo(grupo.nome_grupo, client)
+            st.session_state.grupo = None
+            st.rerun()
 
 
 # --- BLOCO 7: Aba Pessoas ---
