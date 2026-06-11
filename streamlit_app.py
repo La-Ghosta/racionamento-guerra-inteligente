@@ -23,6 +23,7 @@ from racionador.persistencia_supabase import (
     salvar_grupo,
 )
 from racionador.racionamento import relatorio_completo, sugerir_corte
+from racionador.validade import alertas_validade
 
 # --- BLOCO 1: Page config (deve ser a primeira chamada Streamlit) ---
 st.set_page_config(
@@ -436,6 +437,24 @@ def _aba_status() -> None:
 
     html = '<div class="crt">' + secao("ESTOQUE", linhas_log) + "</div>"
     st.markdown(html, unsafe_allow_html=True)
+
+    hoje = datetime.date.today()
+    alertas = alertas_validade(grupo.suprimentos, hoje)
+    if alertas:
+        linhas_validade = []
+        for i, (nome, status, validade) in enumerate(alertas, start=1):
+            if status == "ESGOTADO":
+                rotulo = "VENCIDO"
+            elif validade == hoje:
+                rotulo = "VENCE HOJE"
+            else:
+                dias = (validade - hoje).days
+                rotulo = f"VENCE EM {dias} DIA" if dias == 1 else f"VENCE EM {dias} DIAS"
+            linhas_validade.append(linha(i, nome, rotulo, estado=classe_status(status)))
+        st.markdown(
+            '<div class="crt">' + secao("VALIDADE", linhas_validade) + "</div>",
+            unsafe_allow_html=True,
+        )
 
     if grupo.localizacao:
         with st.spinner(f"Consultando clima em {grupo.localizacao}…"):
