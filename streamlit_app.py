@@ -12,14 +12,17 @@ import streamlit as st
 from crt_ui import classe_status, info, linha, load_theme, secao
 from racionador.clima import geocodificar, obter_clima
 from racionador.coordenacao import visao_coordenador
+from racionador.historico import preparar_historico
 from racionador.mapa import montar_dados_mapa
 from racionador.modelos import Grupo, Pessoa, Suprimento
 from racionador.persistencia_supabase import (
     carregar_grupo,
+    carregar_historico,
     carregar_todos_grupos,
     criar_cliente,
     deletar_grupo,
     listar_grupos,
+    registrar_historico,
     salvar_grupo,
 )
 from racionador.racionamento import relatorio_completo, sugerir_corte
@@ -366,6 +369,11 @@ def _aba_suprimentos() -> None:
                     )
                     grupo.suprimentos.append(sup)
                     _persistir(grupo)
+                    client = _obter_cliente_supabase()
+                    if client is not None:
+                        registrar_historico(
+                            grupo.nome_grupo, sup.nome, sup.quantidade_atual, "adicao", client
+                        )
                     st.success(f"'{sup.nome}' adicionado.")
                     st.rerun()
                 except ValueError as e:
@@ -394,6 +402,11 @@ def _aba_suprimentos() -> None:
                 if col1.button("Atualizar quantidade", key=f"atualizar_{i}"):
                     sup.quantidade_atual = nova_qtd
                     _persistir(grupo)
+                    client = _obter_cliente_supabase()
+                    if client is not None:
+                        registrar_historico(
+                            grupo.nome_grupo, sup.nome, nova_qtd, "atualizacao", client
+                        )
                     st.success(
                         f"Quantidade de '{sup.nome}' atualizada para {nova_qtd} {sup.unidade_medida}."
                     )
@@ -595,7 +608,42 @@ def _aba_coordenacao() -> None:
         )
 
 
-# --- BLOCO 12: Main ---
+# --- BLOCO 12: Aba Histórico ---
+
+
+def _aba_historico() -> None:
+    if st.session_state.grupo is None:
+        st.info("Crie um grupo na barra lateral para começar.")
+        return
+
+    grupo = st.session_state.grupo
+
+    client = _obter_cliente_supabase()
+    if client is None:
+        st.warning("🔌 Banco indisponível — o histórico precisa do Supabase.")
+        return
+
+    registros = preparar_historico(carregar_historico(grupo.nome_grupo, client))
+    if not registros:
+        st.info(
+            "Ainda não há histórico para este grupo. Ele é gravado automaticamente "
+            "ao adicionar ou atualizar a quantidade de suprimentos."
+        )
+        return
+
+    st.header("📜 Histórico de aquisições")
+    df = pd.DataFrame(registros)
+    st.line_chart(df, x="quando", y="quantidade", color="suprimento")
+
+    st.subheader("Log de movimentações")
+    st.dataframe(
+        df[["quando", "suprimento", "quantidade", "tipo"]].iloc[::-1],
+        hide_index=True,
+        use_container_width=True,
+    )
+
+
+# --- BLOCO 13: Main ---
 
 
 def main() -> None:
@@ -617,8 +665,16 @@ def main() -> None:
 
     _renderizar_sidebar()
 
-    aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(
-        ["🏠 Início", "👥 Pessoas", "📦 Suprimentos", "📊 Status", "✂️ Sugestões", "🗺️ Coordenação"],
+    aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs(
+        [
+            "🏠 Início",
+            "👥 Pessoas",
+            "📦 Suprimentos",
+            "📊 Status",
+            "✂️ Sugestões",
+            "🗺 Coordenação",
+            "📜 Histórico",
+        ],
         key="aba_ativa",
         on_change="rerun",
     )
@@ -637,6 +693,9 @@ def main() -> None:
     with aba6:
         if aba6.open:
             _aba_coordenacao()
+            with aba7:
+                if aba7.open:
+                    _aba_historico()
 
 
 if __name__ == "__main__":

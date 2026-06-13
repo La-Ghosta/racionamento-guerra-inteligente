@@ -8,10 +8,12 @@ import pytest
 from racionador.modelos import Grupo, Pessoa, Suprimento
 from racionador.persistencia_supabase import (
     carregar_grupo,
+    carregar_historico,
     carregar_todos_grupos,
     criar_cliente,
     deletar_grupo,
     listar_grupos,
+    registrar_historico,
     salvar_grupo,
 )
 
@@ -347,3 +349,60 @@ def test_deletar_grupo_erro_conexao_retorna_false():
     cliente = MagicMock()
     cliente.table.side_effect = Exception("connection refused")
     assert deletar_grupo("Equipe Alfa", cliente) is False
+
+
+def _cliente_historico(linhas_grupos, linhas_historico=None):
+    """Client mockado: tabela grupos resolve o id; tabela historico devolve linhas."""
+    tab_grupos = MagicMock()
+    tab_grupos.select.return_value.eq.return_value.execute.return_value.data = linhas_grupos
+
+    tab_historico = MagicMock()
+    tab_historico.select.return_value.eq.return_value.order.return_value.execute.return_value.data = (
+        linhas_historico or []
+    )
+
+    tabelas = {"grupos": tab_grupos, "historico": tab_historico}
+    cliente = MagicMock()
+    cliente.table.side_effect = tabelas.__getitem__
+    return cliente, tab_historico
+
+
+def test_registrar_historico_happy_path():
+    cliente, tab_historico = _cliente_historico(linhas_grupos=[{"id": 7}])
+    assert registrar_historico("Equipe Alfa", "Agua", 20.0, "adicao", cliente) is True
+    tab_historico.insert.assert_called_once_with(
+        {"grupo_id": 7, "suprimento": "Agua", "quantidade": 20.0, "tipo": "adicao"}
+    )
+    tab_historico.insert.return_value.execute.assert_called_once()
+
+
+def test_registrar_historico_grupo_inexistente_retorna_false():
+    cliente, tab_historico = _cliente_historico(linhas_grupos=[])
+    assert registrar_historico("Fantasma", "Agua", 20.0, "adicao", cliente) is False
+    tab_historico.insert.assert_not_called()
+
+
+def test_registrar_historico_erro_conexao_retorna_false():
+    cliente = MagicMock()
+    cliente.table.side_effect = Exception("connection refused")
+    assert registrar_historico("Equipe Alfa", "Agua", 20.0, "adicao", cliente) is False
+
+
+def test_carregar_historico_happy_path():
+    linhas = [
+        {"id": 1, "grupo_id": 7, "suprimento": "Agua", "quantidade": 20.0, "tipo": "adicao"},
+        {"id": 2, "grupo_id": 7, "suprimento": "Agua", "quantidade": 15.0, "tipo": "atualizacao"},
+    ]
+    cliente, _ = _cliente_historico(linhas_grupos=[{"id": 7}], linhas_historico=linhas)
+    assert carregar_historico("Equipe Alfa", cliente) == linhas
+
+
+def test_carregar_historico_grupo_inexistente_retorna_lista_vazia():
+    cliente, _ = _cliente_historico(linhas_grupos=[])
+    assert carregar_historico("Fantasma", cliente) == []
+
+
+def test_carregar_historico_erro_conexao_retorna_lista_vazia():
+    cliente = MagicMock()
+    cliente.table.side_effect = Exception("connection refused")
+    assert carregar_historico("Equipe Alfa", cliente) == []

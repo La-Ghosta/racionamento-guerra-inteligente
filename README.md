@@ -84,6 +84,7 @@ sem ele o app funciona offline):
 2. No **SQL Editor**, rode os arquivos de `db/migrations/` em ordem:
    - `0000_init.sql` — cria as tabelas `grupos`, `pessoas` e `suprimentos`.
    - `0001_grupos_regiao_pedido_ajuda.sql` — adiciona `regiao` e `pedido_ajuda`.
+   - `0002_historico.sql` — cria a tabela `historico` (snapshots de quantidade por suprimento).
 3. Em **Settings → API**, copie a `URL` e a `service_role key` para o
    `secrets.toml` abaixo.
 
