@@ -128,6 +128,56 @@ def deletar_grupo(nome: str, client: Any) -> bool:
         return False
 
 
+def registrar_historico(
+    nome_grupo: str, suprimento: str, quantidade: float, tipo: str, client: Any
+) -> bool:
+    """Grava um snapshot de quantidade de um suprimento na tabela historico.
+
+    Resolve o grupo_id pelo nome; se o grupo não existir retorna False.
+    ``tipo`` é 'adicao' (item novo) ou 'atualizacao' (quantidade alterada).
+    Retorna True em sucesso e False em qualquer falha de conexão/API.
+    """
+    try:
+        resultado = client.table("grupos").select("id").eq("nome", nome_grupo).execute()
+        if not resultado.data:
+            return False
+        grupo_id = resultado.data[0]["id"]
+        client.table("historico").insert(
+            {
+                "grupo_id": grupo_id,
+                "suprimento": suprimento,
+                "quantidade": quantidade,
+                "tipo": tipo,
+            }
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def carregar_historico(nome_grupo: str, client: Any) -> list[dict]:
+    """Carrega os snapshots de historico de um grupo, ordenados por criado_em.
+
+    Resolve o grupo_id pelo nome; grupo inexistente retorna []. Devolve as
+    linhas cruas do banco (dicts). Retorna [] em qualquer falha de conexão/API.
+    """
+    try:
+        resultado = client.table("grupos").select("id").eq("nome", nome_grupo).execute()
+        if not resultado.data:
+            return []
+        grupo_id = resultado.data[0]["id"]
+        return (
+            client.table("historico")
+            .select("*")
+            .eq("grupo_id", grupo_id)
+            .order("criado_em")
+            .execute()
+            .data
+        )
+    except Exception:
+        return []
+
+
 def listar_grupos(client: Any) -> list[str]:
     """Lista os nomes dos grupos cadastrados, em ordem alfabética.
 
