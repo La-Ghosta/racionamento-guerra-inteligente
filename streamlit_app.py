@@ -693,9 +693,9 @@ def main() -> None:
     with aba6:
         if aba6.open:
             _aba_coordenacao()
-            with aba7:
-                if aba7.open:
-                    _aba_historico()
+    with aba7:
+        if aba7.open:
+            _aba_historico()
 
 
 if __name__ == "__main__":
